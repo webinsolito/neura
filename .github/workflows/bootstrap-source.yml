@@ -26,25 +26,9 @@ jobs:
           fi
 
           archive="bootstrap/c9_38_source.tar.gz"
-          if [ -f "$archive" ]; then
-            expected_blob="6a50496d5f814d31a1469eda740b8cf2205a2d8b"
-            actual_blob="$(git hash-object "$archive")"
-            if [ "$actual_blob" != "$expected_blob" ]; then
-              echo "Bundled source archive blob mismatch: $actual_blob"
-              exit 1
-            fi
-            tar -xzf "$archive"
-          else
-            mapfile -t parts < <(find bootstrap -maxdepth 1 -name 'core.b64.part-*' | sort)
-            if [ "${#parts[@]}" -ne 15 ]; then
-              echo "No verified source archive and expected 15 bootstrap parts, found ${#parts[@]}."
-              exit 1
-            fi
-            cat "${parts[@]}" > /tmp/core.b64
-            base64 -d /tmp/core.b64 > /tmp/c9_38_core.tar.xz
-            echo "9cb433eb74d5d44207f9d61cde55d75e7ee2b33bf2f7d6ceb8f59adf77e627ee  /tmp/c9_38_core.tar.xz" | sha256sum -c -
-            tar -xJf /tmp/c9_38_core.tar.xz
-          fi
+          test -f "$archive"
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
+          tar -xzf "$archive"
 
           test -d capo_local/src
           test -f capo_local/src/go.mod
