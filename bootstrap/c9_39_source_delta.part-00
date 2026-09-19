@@ -1,0 +1,281 @@
+diff --git a/capo_local/src/cognitive_router.go b/capo_local/src/cognitive_router.go
+index c7a5ebf..f67c2c8 100644
+--- a/capo_local/src/cognitive_router.go
++++ b/capo_local/src/cognitive_router.go
+@@ -114,11 +114,10 @@ func (s *Server) deterministicLocalCommand(ctx context.Context, message string)
+ 		if s.memoryOS != nil {
+ 			memoryOK, memoryDetail = s.memoryOS.Ready()
+ 		}
+-		llamaOK := s.checkURL(ctx, strings.TrimRight(s.cfg.LlamaURL, "/")+"/health")
+ 		modelID := "nessuno"
+ 		if s.modelFabric != nil {
+-			if selected, ok := s.modelFabric.Select(llamaOK); ok {
+-				modelID = selected.ID
++			if route, ok := s.selectLocalModelRoute(ctx, ModelTaskChat); ok {
++				modelID = route.Candidate.ID
+ 			}
+ 		}
+ 		reply := fmt.Sprintf("NEURA %s · Trust=%t · MemoryOS=%t · runtime locale=%s", evolutionVersion, trustOK, memoryOK, modelID)
+diff --git a/capo_local/src/evolution.go b/capo_local/src/evolution.go
+index 6004ba9..ec9d2fc 100644
+--- a/capo_local/src/evolution.go
++++ b/capo_local/src/evolution.go
+@@ -1,7 +1,6 @@
+ package main
+ 
+ import (
+-	"bytes"
+ 	"context"
+ 	"crypto/sha256"
+ 	"encoding/hex"
+@@ -20,7 +19,7 @@ import (
+ 	"time"
+ )
+ 
+-const evolutionVersion = "0.40.38-c9.38-external-warden-capability-leases"
++const evolutionVersion = "0.40.39-c9.39-integrated-security-model-fabric"
+ 
+ type EvolutionConfig struct {
+ 	Enabled               bool   `json:"enabled"`
+@@ -300,13 +299,14 @@ func (m *EvolutionManager) prerequisites(ctx context.Context) map[string]any {
+ 	src := m.sourceDir()
+ 	_, srcErr := os.Stat(filepath.Join(src, "go.mod"))
+ 	goPath, goErr := exec.LookPath("go")
+-	llamaHealthy := m.srv.checkURL(ctx, strings.TrimRight(m.srv.cfg.LlamaURL, "/")+"/health")
+ 	localAI := false
+ 	localRuntime := ""
++	localAIURL := ""
+ 	if m.srv.modelFabric != nil {
+-		if selected, ok := m.srv.modelFabric.Select(llamaHealthy); ok {
++		if route, ok := m.srv.selectLocalModelRoute(ctx, ModelTaskPlanning); ok {
+ 			localAI = true
+-			localRuntime = selected.ID
++			localRuntime = route.Candidate.ID
++			localAIURL = route.Candidate.Endpoint
+ 		}
+ 	}
+ 	trustOK := false
+@@ -326,7 +326,7 @@ func (m *EvolutionManager) prerequisites(ctx context.Context) map[string]any {
+ 	return map[string]any{
+ 		"source_ok": srcErr == nil, "source_dir": src,
+ 		"go_ok": goErr == nil, "go_path": goPath,
+-		"local_ai_ok": localAI, "local_ai_runtime": localRuntime, "local_ai_url": m.srv.cfg.LlamaURL,
++		"local_ai_ok": localAI, "local_ai_runtime": localRuntime, "local_ai_url": localAIURL,
+ 		"trust_ok": trustOK, "memory_os_ok": memoryOK, "zero_cost_only": true,
+ 		"ready": srcErr == nil && goErr == nil && localAI && trustOK && memoryOK,
+ 	}
+@@ -1526,53 +1526,55 @@ func (m *EvolutionManager) callLocalJSON(ctx context.Context, role, prompt strin
+ 		delegationID = grant.ID
+ 		defer func() { _ = m.srv.delegations.Revoke(grant.ID) }()
+ 	}
+-	// Safety/Trust must still run even for replay, but endpoint health must not:
+-	// strict replay is specifically required to work without invoking the real model.
+-	if err := m.srv.authorize(ActionRequest{Component: "evolution:" + role, Tool: "local_ai", URL: m.srv.cfg.LlamaURL, Sandbox: true, Cost: 5, DelegationID: delegationID}, "", "", "LOCAL_AI_"+strings.ToUpper(role)); err != nil {
+-		return "", err
++	input := map[string]any{"role": role, "prompt": prompt, "max_tokens": maxTokens, "model": m.srv.cfg.LlamaModel, "runtime": "model_fabric_2026", "task": taskForEvolutionRole(role)}
++
++	// Replay is resolved before live route discovery. A cassette hit must remain
++	// fully offline, while Trust/Safety/Warden still authorize the logical local_ai
++	// capability. On a real execution, the exact selected loopback endpoint is
++	// frozen first and becomes part of the capability request.
++	replayHit := false
++	if m.srv.replay != nil {
++		mode, hit, err := m.srv.replay.PreflightString("local_ai_json", "evolution", m.srv.cfg.LlamaModel, input)
++		if err != nil {
++			return "", err
++		}
++		replayHit = hit
++		if mode == ReplayStrict && !hit {
++			if err := m.srv.authorize(ActionRequest{Component: "evolution:" + role, Tool: "local_ai", Sandbox: true, Cost: 5, DelegationID: delegationID}, "", "", "LOCAL_AI_"+strings.ToUpper(role)); err != nil {
++				return "", err
++			}
++			return "", errors.New("strict_replay_cassette_missing")
++		}
+ 	}
+-	input := map[string]any{"role": role, "prompt": prompt, "max_tokens": maxTokens, "model": m.srv.cfg.LlamaModel, "runtime": "llama.cpp"}
+-	realCall := func() (string, error) {
+-		llamaHealthy := m.srv.checkURL(ctx, strings.TrimRight(m.srv.cfg.LlamaURL, "/")+"/health")
++
++	var frozenRoute ModelRoute
++	if !replayHit {
+ 		if m.srv.modelFabric == nil {
+ 			return "", errors.New("model fabric non inizializzato")
+ 		}
+-		selected, ok := m.srv.modelFabric.Select(llamaHealthy)
++		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
++		defer cancel()
++		route, ok := m.srv.selectLocalModelRoute(cctx, taskForEvolutionRole(role))
+ 		if !ok {
+-			return "", errors.New("nessun runtime locale zero-cost implementato disponibile")
+-		}
+-		if selected.ID != "llama.cpp" {
+-			return "", fmt.Errorf("runtime %s selezionato ma adapter self-evolution non implementato", selected.ID)
++			return "", errors.New("nessun runtime locale zero-cost implementato disponibile per il task")
+ 		}
+-		if !llamaHealthy {
+-			return "", errors.New("motore IA locale selezionato non disponibile")
++		frozenRoute = route
++	}
++	authURL := ""
++	if !replayHit {
++		authURL = frozenRoute.Candidate.Endpoint
++	}
++	if err := m.srv.authorize(ActionRequest{Component: "evolution:" + role, Tool: "local_ai", URL: authURL, Sandbox: true, Cost: 5, DelegationID: delegationID}, "", "", "LOCAL_AI_"+strings.ToUpper(role)); err != nil {
++		return "", err
++	}
++
++	realCall := func() (string, error) {
++		if frozenRoute.Candidate.ID == "" {
++			return "", errors.New("model route non congelata")
+ 		}
+-		reqBody := LlamaRequest{Model: m.srv.cfg.LlamaModel, Messages: []LlamaMessage{{Role: "system", Content: "Sei un componente interno di NEURA. Produci esclusivamente il JSON richiesto, senza markdown."}, {Role: "user", Content: prompt}}, Temperature: 0.15, MaxTokens: maxTokens, Stream: false}
+-		payload, _ := json.Marshal(reqBody)
+ 		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+ 		defer cancel()
+-		req, _ := http.NewRequestWithContext(cctx, http.MethodPost, strings.TrimRight(m.srv.cfg.LlamaURL, "/")+"/v1/chat/completions", bytes.NewReader(payload))
+-		req.Header.Set("Content-Type", "application/json")
+-		resp, err := m.srv.client.Do(req)
+-		if err != nil {
+-			return "", err
+-		}
+-		defer resp.Body.Close()
+-		raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+-		if err != nil {
+-			return "", err
+-		}
+-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+-			return "", fmt.Errorf("IA locale HTTP %d: %s", resp.StatusCode, compact(raw, 500))
+-		}
+-		var lr LlamaResponse
+-		if err := json.Unmarshal(raw, &lr); err != nil {
+-			return "", err
+-		}
+-		if len(lr.Choices) == 0 {
+-			return "", errors.New("IA locale senza choices")
+-		}
+-		return cleanModelReply(lr.Choices[0].Message.Content), nil
++		return m.srv.callOpenAICompatibleJSON(cctx, frozenRoute, prompt, maxTokens)
+ 	}
+ 	if m.srv.replay == nil {
+ 		return realCall()
+diff --git a/capo_local/src/evolution_core_mutation_test.go b/capo_local/src/evolution_core_mutation_test.go
+index 7454d68..c11db54 100644
+--- a/capo_local/src/evolution_core_mutation_test.go
++++ b/capo_local/src/evolution_core_mutation_test.go
+@@ -133,9 +133,13 @@ func TestModelFabricInvariantOnlyImplementedLocalZeroCostCanBeSelected(t *testin
+ 				t.Fatalf("invalid selected runtime: %+v", selected)
+ 			}
+ 		}
++		allowedImplemented := map[string]bool{"llama.cpp": true, "bonsai2-27b": true, "qwen3.6-35b-a3b": true, "gpt-oss-20b": true, "bitnet": true}
+ 		for _, c := range m.Candidates(healthy) {
+-			if c.ID != "llama.cpp" && (c.Implemented || c.Usable) {
+-				t.Fatalf("adapter admission drift: %+v", c)
++			if c.Implemented && !allowedImplemented[c.ID] {
++				t.Fatalf("unexpected implemented adapter: %+v", c)
++			}
++			if c.Usable && (!c.Implemented || !c.Local || !c.ZeroCost || !c.Discovered) {
++				t.Fatalf("usable runtime violates admission invariant: %+v", c)
+ 			}
+ 		}
+ 	}
+diff --git a/capo_local/src/evolution_test.go b/capo_local/src/evolution_test.go
+index f4e99fc..6d56a5f 100644
+--- a/capo_local/src/evolution_test.go
++++ b/capo_local/src/evolution_test.go
+@@ -116,11 +116,7 @@ func TestEvolutionCycleRetriesBadPatchThenPromotes(t *testing.T) {
+ 	srv.cfg.LlamaModel = "fake"
+ 	mgr := &EvolutionManager{srv: srv, cfg: defaultEvolutionConfig(), stopCh: make(chan struct{})}
+ 	mgr.cfg.MaxAttempts = 2
+-	// This fixture verifies Autonomous Repair retry semantics, not C9.37
+-	// candidate competition. Competition has its own end-to-end test and
+-	// requires two unique eligible contenders by design; keeping it enabled
+-	// here made this legacy retry fixture fail for an unrelated reason.
+-	mgr.cfg.CompetitionCandidates = 1
++	mgr.cfg.CompetitionCandidates = 1 // this test isolates repair retry, not C9.37 competition
+ 	mgr.cfg.IntervalMinutes = 60
+ 	srv.evolution = mgr
+ 	if err := mgr.ensureState(); err != nil {
+diff --git a/capo_local/src/integrated_security_model_fabric_test.go b/capo_local/src/integrated_security_model_fabric_test.go
+new file mode 100644
+index 0000000..2aa49a2
+--- /dev/null
++++ b/capo_local/src/integrated_security_model_fabric_test.go
+@@ -0,0 +1,150 @@
++package main
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	wardenapi "neura/capo-local/warden"
++)
++
++func writeIntegratedWardenPolicy(t *testing.T, root string, allowedHosts []string) {
++	t.Helper()
++	if err := os.MkdirAll(filepath.Join(root, "capo_local", "src"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	p := wardenapi.Policy{
++		Version:            1,
++		FailClosed:         true,
++		AllowedTools:       []string{"local_ai"},
++		AllowedRoots:       []string{"capo_local/src"},
++		AllowedHosts:       allowedHosts,
++		AllowedProcesses:   []string{"go", "go.exe"},
++		MaxLeaseTTLSeconds: 30,
++		MaxActionsPerLease: 1,
++		MaxCostPerLease:    10,
++		RecurringCostEUR:   0,
++	}
++	b, _ := json.MarshalIndent(p, "", "  ")
++	b = append(b, '\n')
++	if err := os.WriteFile(filepath.Join(root, "capo_local", "warden_policy.json"), b, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	sum := sha256.Sum256(b)
++	lock := wardenapi.PolicyLock{Version: 1, Algorithm: "sha256", SHA256: hex.EncodeToString(sum[:]), Policy: "fail_closed", RecurringCostEUR: 0}
++	lb, _ := json.MarshalIndent(lock, "", "  ")
++	lb = append(lb, '\n')
++	if err := os.WriteFile(filepath.Join(root, "capo_local", "warden_policy.lock.json"), lb, 0o600); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func newIntegratedTestServer(t *testing.T, root string, aiURL string) *Server {
++	t.Helper()
++	writeTestCapabilities(t, root)
++	cfg := defaultConfig()
++	// Deliberately use localhost here. The alternate provider below is bound to
++	// 127.0.0.1 and the Warden policy only permits 127.0.0.1. A stale
++	// authorization against cfg.LlamaURL would therefore fail this test.
++	cfg.LlamaURL = "http://localhost:1"
++	cfg.LlamaModel = "primary-down"
++	cfg.ExternalWardenRequired = true
++	t.Setenv("NEURA_BONSAI_URL", aiURL)
++	t.Setenv("NEURA_BONSAI_MODEL", "Bonsai-2-27B")
++	t.Setenv("NEURA_GPTOSS_URL", "")
++	t.Setenv("NEURA_QWEN_URL", "")
++	t.Setenv("NEURA_BITNET_URL", "")
++	s := &Server{cfg: cfg, rootDir: root, client: &http.Client{Timeout: 2 * time.Second}, providerKeys: map[string]string{}, providerHealth: map[string]*providerHealthState{}}
++	s.initGovernance()
++	if s.warden == nil {
++		t.Fatalf("external warden not started: %s", s.wardenErr)
++	}
++	t.Cleanup(func() { _ = s.warden.Close() })
++	return s
++}
++
++func TestC939AlternateProviderAuthorizedAtFrozenSelectedEndpoint(t *testing.T) {
++	if os.Getenv("NEURA_WARDEN_BIN") == "" {
++		t.Skip("NEURA_WARDEN_BIN not set for integrated Warden test")
++	}
++	v
