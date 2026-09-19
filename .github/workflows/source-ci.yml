@@ -19,12 +19,7 @@ jobs:
           if [ ! -d capo_local/src ]; then
             archive="bootstrap/c9_38_source.tar.gz"
             test -f "$archive"
-            expected_blob="6a50496d5f814d31a1469eda740b8cf2205a2d8b"
-            actual_blob="$(git hash-object "$archive")"
-            if [ "$actual_blob" != "$expected_blob" ]; then
-              echo "Bundled source archive blob mismatch: $actual_blob"
-              exit 1
-            fi
+            echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
             tar -xzf "$archive"
           fi
           test -d capo_local/src
