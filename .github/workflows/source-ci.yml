@@ -1,34 +1,58 @@
-name: NEURA Source CI
+name: NEURA C9.39 Source CI
+
 on:
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: neura-c9-39-source-ci
+  cancel-in-progress: true
+
 jobs:
   source-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Restore verified bundled source when tree is not expanded
+      - name: Restore verified C9.38 Warden source baseline
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -d capo_local/src ]; then
-            archive="bootstrap/c9_38_source.tar.gz"
-            test -f "$archive"
-            echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
-            tar -xzf "$archive"
-          fi
-          test -d capo_local/src
+          archive="bootstrap/c9_38_source.tar.gz"
+          test -f "$archive"
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
+          rm -rf capo_local/src
+          tar -xzf "$archive"
           test -f capo_local/src/go.mod
+
+      - name: Apply verified C9.39 integration delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch=/tmp/c9_39_source_delta.patch
+          cat bootstrap/c9_39_source_delta.part-00               bootstrap/c9_39_source_delta.part-01               bootstrap/c9_39_source_delta.part-02               bootstrap/c9_39_source_delta.part-03               bootstrap/c9_39_source_delta.part-04 > "$patch"
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  $patch" | sha256sum -c -
+          git apply --check "$patch"
+          git apply "$patch"
+          grep -F '0.40.39-c9.39-integrated-security-model-fabric' capo_local/src/evolution.go
 
       - uses: actions/setup-go@v7
         with:
           go-version: '1.23.x'
           cache: false
+
+      - name: Build External Warden for integration tests
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o /tmp/neura-warden ./cmd/neura-warden
+          test -x /tmp/neura-warden
 
       - name: Formatting check
         shell: bash
@@ -44,8 +68,16 @@ jobs:
         working-directory: capo_local/src
         run: go vet ./...
 
+      - name: C9.39 integration gate
+        working-directory: capo_local/src
+        env:
+          NEURA_WARDEN_BIN: /tmp/neura-warden
+        run: go test -count=1 -run 'TestC939|TestExternalWarden|TestModelFabric' .
+
       - name: Source regression gate
         working-directory: capo_local/src
+        env:
+          NEURA_WARDEN_BIN: /tmp/neura-warden
         run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
 
       - name: Environment-limited gate status
@@ -53,4 +85,5 @@ jobs:
           echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_IN_SOURCE_CI'
           echo 'TestWindowsBootstrapC927Contract=NOT_VERIFIED_IN_SOURCE_CI'
           echo 'TestCleanWindowsReadinessHarnessExists=NOT_VERIFIED_IN_SOURCE_CI'
-          echo 'These are verified by the full Windows release/runtime gate, not reinterpreted as PASS.'
+          echo 'Windows native execution=NOT_TESTED'
+          echo 'No skipped or environment-limited item is reinterpreted as PASS.'
