@@ -1,0 +1,42 @@
+name: Bootstrap C9.38 source
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/bootstrap-source.yml'
+      - 'bootstrap/EXPAND_SOURCE'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: neura-bootstrap-source
+  cancel-in-progress: false
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: candidate/autonomy
+          fetch-depth: 0
+      - name: Expand sanitized C9.38 repository seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f bootstrap/c9_38_source.tar.gz
+          tar -xzf bootstrap/c9_38_source.tar.gz
+          rm -f bootstrap/c9_38_source.tar.gz
+      - name: Commit expanded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'NEURA Bootstrap'
+          git config user.email 'neura-bootstrap@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No bootstrap changes.'
+            exit 0
+          fi
+          git commit -m 'bootstrap: expand sanitized C9.38 source tree'
+          git push origin HEAD:candidate/autonomy
