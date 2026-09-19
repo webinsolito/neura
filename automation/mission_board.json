@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "generated_at_utc": "2026-09-19T10:19:39.409672Z",
-  "valid_until_utc": "2026-09-19T11:19:39.409672Z",
+  "generated_at_utc": "2026-09-19T11:18:46.467936Z",
+  "valid_until_utc": "2026-09-19T12:18:46.467936Z",
   "branch": "main",
-  "head_sha": "1a5236e87bf5ec8661f836fecc6829bce944580d",
+  "head_sha": "82dec132932a4f36fd6099396485f9c6d67fe359",
   "window_minutes": 75,
   "commits_in_window": 2,
   "changed_files": [
@@ -12,16 +12,16 @@
     "automation/mission_board.json",
     "automation/state/supervisor_state.json"
   ],
-  "activity_controlled": "PERFORMANCE_RESOURCES",
+  "activity_controlled": "REPLAY_RECOVERY_ROLLBACK",
   "focus_scores": {
-    "CODE_TEST": 1.327,
-    "SECURITY_WARDEN_SANDBOX": 2.027,
-    "MEMORY_TEMPORAL": 1.711,
-    "REPLAY_RECOVERY_ROLLBACK": 8.05,
-    "PERFORMANCE_RESOURCES": 8.06,
-    "WINDOWS_COMPATIBILITY": -2.599,
-    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 0.658,
-    "VOICE_UX_COMPUTER_USE": 1.014
+    "CODE_TEST": 1.665,
+    "SECURITY_WARDEN_SANDBOX": 2.365,
+    "MEMORY_TEMPORAL": 2.049,
+    "REPLAY_RECOVERY_ROLLBACK": 8.06,
+    "PERFORMANCE_RESOURCES": -2.602,
+    "WINDOWS_COMPATIBILITY": 0.66,
+    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 0.997,
+    "VOICE_UX_COMPUTER_USE": 1.352
   },
   "rules": {
     "one_macro_area_per_candidate_run": true,
@@ -53,23 +53,23 @@
       "status": "PENDING"
     },
     {
-      "id": "PERF-1",
+      "id": "RR-1",
       "priority": "HIGH",
-      "objective": "Misurare solo metriche pertinenti alle modifiche: tempo, RAM, allocazioni, dimensione binario o startup.",
+      "objective": "Verificare replay, recovery, rollback e identita degli artefatti cambiati nell'ultima ora.",
       "kind": "REPORT_ONLY",
       "status": "PENDING"
     },
     {
-      "id": "PERF-2",
+      "id": "RR-2",
       "priority": "HIGH",
-      "objective": "Confrontare candidate vs baseline usando lo stesso benchmark; nessun punteggio inventato.",
+      "objective": "Confrontare golden/replay evidence e cercare la prima divergenza rispetto alla baseline valida.",
       "kind": "VERIFY",
       "status": "PENDING"
     },
     {
-      "id": "PERF-3",
+      "id": "RR-3",
       "priority": "HIGH",
-      "objective": "Ottimizzare soltanto regressioni misurate e senza ridurre affidabilita.",
+      "objective": "Se recovery o replay non sono riproducibili, fermare nuove missioni di codice e creare una candidate di ripristino.",
       "kind": "CODE_IF_EVIDENCE",
       "status": "PENDING"
     }
