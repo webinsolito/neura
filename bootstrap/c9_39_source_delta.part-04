@@ -1,0 +1,101 @@
+.initGovernance()
++	srv.replay = nil
++	mgr := &EvolutionManager{srv: srv, cfg: defaultEvolutionConfig(), stopCh: make(chan struct{})}
++	out, err := mgr.callLocalJSON(context.Background(), "architect", "{}", 64)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(out, `"provider":"bonsai"`) {
++		t.Fatalf("unexpected output %q", out)
++	}
++	if completions != 1 {
++		t.Fatalf("expected exactly one Bonsai completion, got %d", completions)
++	}
++}
+diff --git a/capo_local/src/regression.go b/capo_local/src/regression.go
+index c9ebf8f..e5bf13d 100644
+--- a/capo_local/src/regression.go
++++ b/capo_local/src/regression.go
+@@ -7,6 +7,7 @@ import (
+ 	"fmt"
+ 	"net"
+ 	"net/http"
++	"net/http/httptest"
+ 	"os"
+ 	"path/filepath"
+ 	"sort"
+@@ -702,6 +703,31 @@ func runRegressionFixture(f RegressionFixture) (bool, string) {
+ 		m := OpenModelFabric(root, "http://127.0.0.1:8771")
+ 		_, ok := m.Select(false)
+ 		return !ok, "discovered ONNX without adapter must not be selected"
++	case "model_fabric_remote_endpoint_denied":
++		_, ok := localOnlyEndpoint("https://example.com:8781")
++		return !ok, "non-loopback provider endpoint must be denied"
++	case "model_fabric_model_identity_mismatch_denied":
++		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			if r.URL.Path == "/v1/models" {
++				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": "wrong-model"}}})
++				return
++			}
++			if r.URL.Path == "/health" {
++				w.WriteHeader(http.StatusOK)
++				return
++			}
++			http.NotFound(w, r)
++		}))
++		defer srv.Close()
++		c := ModelRuntimeCandidate{ID: "bonsai2-27b", Model: "Bonsai-2-27B", Endpoint: srv.URL, Local: true, ZeroCost: true, Implemented: true}
++		ok := probeOpenAICompatible(context.Background(), srv.Client(), c)
++		return !ok, "health alone must not admit wrong model identity"
++	case "model_fabric_task_routing_deterministic":
++		bonsai := ModelRuntimeCandidate{ID: "bonsai2-27b", Priority: 120, Capabilities: []string{"chat", "planning", "coding", "test_author"}}
++		bitnet := ModelRuntimeCandidate{ID: "bitnet", Priority: 75, Capabilities: []string{"chat", "routing"}}
++		codingOK := candidateHasCapability(bonsai, "coding") && !candidateHasCapability(bitnet, "coding")
++		routingOK := candidateHasCapability(bitnet, "routing") && modelTaskPriority(bitnet, ModelTaskRouting) > modelTaskPriority(bonsai, ModelTaskRouting)
++		return codingOK && routingOK, fmt.Sprintf("coding=%t routing=%t bonsai=%d bitnet=%d", codingOK, routingOK, modelTaskPriority(bonsai, ModelTaskRouting), modelTaskPriority(bitnet, ModelTaskRouting))
+ 	default:
+ 		return false, "fixture kind non supportato: " + f.Kind
+ 	}
+diff --git a/capo_local/src/replay.go b/capo_local/src/replay.go
+index c6af989..5dbd8d1 100644
+--- a/capo_local/src/replay.go
++++ b/capo_local/src/replay.go
+@@ -319,6 +319,25 @@ func (r *ReplayStore) poisonUnlocked(cause error) {
+ 	r.err = "replay_store_poisoned: " + cause.Error()
+ }
+ 
++func (r *ReplayStore) PreflightString(operation, component, model string, input any) (ReplayMode, bool, error) {
++	if r == nil {
++		return ReplayOff, false, nil
++	}
++	r.mu.Lock()
++	mode := r.mode
++	valid := r.valid
++	why := r.err
++	r.mu.Unlock()
++	if !valid {
++		return mode, false, errors.New(why)
++	}
++	if mode != ReplayUse && mode != ReplayStrict {
++		return mode, false, nil
++	}
++	_, ok, err := r.lookup(operation, component, model, input)
++	return mode, ok, err
++}
++
+ func (r *ReplayStore) ExecuteString(operation, component, model string, input any, taskID string, real func() (string, error)) (string, bool, error) {
+ 	r.mu.Lock()
+ 	mode := r.mode
+diff --git a/capo_local/src/security.go b/capo_local/src/security.go
+index 1521059..d469352 100644
+--- a/capo_local/src/security.go
++++ b/capo_local/src/security.go
+@@ -286,7 +286,7 @@ func (s *Server) initGovernance() {
+ 	s.flight = OpenFlightRecorder(filepath.Join(s.rootDir, "capo_data", "audit", "flight.jsonl"))
+ 	s.safety = LoadSafetyKernel(s.rootDir)
+ 	s.memoryOS = OpenMemoryOS(filepath.Join(s.rootDir, "capo_data", "memory_os", "memory.jsonl"))
+-	s.modelFabric = OpenModelFabric(s.rootDir, s.cfg.LlamaURL)
++	s.modelFabric = OpenModelFabric(s.rootDir, s.cfg.LlamaURL, s.cfg.LlamaModel)
+ 	s.runtimeSupervisor = NewLocalRuntimeSupervisor(s.cfg.LlamaURL, s.cfg.LlamaModel)
+ 	tasks, _ := OpenTaskStore(filepath.Join(s.rootDir, "capo_data", "tasks", "tasks.json"))
+ 	s.tasks = tasks
