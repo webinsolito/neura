@@ -1,26 +1,27 @@
 {
   "schema": 1,
-  "generated_at_utc": "2026-09-19T06:24:25.124058Z",
-  "valid_until_utc": "2026-09-19T07:24:25.124058Z",
+  "generated_at_utc": "2026-09-19T07:19:00.768809Z",
+  "valid_until_utc": "2026-09-19T08:19:00.768809Z",
   "branch": "main",
-  "head_sha": "60f9022c2e404dd2286df97da4d67e1d9b2b3855",
+  "head_sha": "df83d103e4d57ceeaf6908f6c6d4eeed442fcef1",
   "window_minutes": 75,
-  "commits_in_window": 1,
+  "commits_in_window": 2,
   "changed_files": [
     "automation/MISSION_BOARD.md",
+    "automation/SCOUT_LEDGER.md",
     "automation/mission_board.json",
     "automation/state/supervisor_state.json"
   ],
-  "activity_controlled": "CODE_TEST",
+  "activity_controlled": "VOICE_UX_COMPUTER_USE",
   "focus_scores": {
-    "CODE_TEST": 8.06,
-    "SECURITY_WARDEN_SANDBOX": 0.76,
-    "MEMORY_TEMPORAL": -2.636,
-    "REPLAY_RECOVERY_ROLLBACK": 8.01,
-    "PERFORMANCE_RESOURCES": 8.02,
-    "WINDOWS_COMPATIBILITY": 8.03,
-    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 8.04,
-    "VOICE_UX_COMPUTER_USE": 8.05
+    "CODE_TEST": -2.627,
+    "SECURITY_WARDEN_SANDBOX": 0.993,
+    "MEMORY_TEMPORAL": 0.677,
+    "REPLAY_RECOVERY_ROLLBACK": 8.02,
+    "PERFORMANCE_RESOURCES": 8.03,
+    "WINDOWS_COMPATIBILITY": 8.04,
+    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 8.05,
+    "VOICE_UX_COMPUTER_USE": 8.06
   },
   "rules": {
     "one_macro_area_per_candidate_run": true,
@@ -52,23 +53,23 @@
       "status": "PENDING"
     },
     {
-      "id": "CT-1",
+      "id": "UX-1",
       "priority": "HIGH",
-      "objective": "Controllare diff e test toccati nell'ultima ora; cercare test deboli, regressioni o codice duplicato.",
+      "objective": "Controllare latenza, cancellazione, accessibilita e sicurezza delle interazioni/UI/computer-use toccate.",
       "kind": "REPORT_ONLY",
       "status": "PENDING"
     },
     {
-      "id": "CT-2",
+      "id": "UX-2",
       "priority": "HIGH",
-      "objective": "Eseguire source gate mirato sulle aree modificate e classificare PASS/FAIL/UNKNOWN senza reinterpretazioni.",
+      "objective": "Verificare che UX e computer-use non aggirino Warden, audit o post-action verification.",
       "kind": "VERIFY",
       "status": "PENDING"
     },
     {
-      "id": "CT-3",
+      "id": "UX-3",
       "priority": "HIGH",
-      "objective": "Se esiste un FAIL riproducibile, preparare una sola candidate di correzione con rollback; altrimenti nessuna modifica.",
+      "objective": "Modificare UX/voice soltanto con criterio misurabile e senza compromettere safety/performance.",
       "kind": "CODE_IF_EVIDENCE",
       "status": "PENDING"
     }
