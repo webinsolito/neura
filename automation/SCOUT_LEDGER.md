@@ -100,16 +100,44 @@ Progressive technical scouting ledger. Re-check entries only for material new re
 - Progressive disclosure and portable skill format are useful, but executable skill content is explicitly a trust boundary. NEURA already tracks progressive loading; new delta is interoperability testing, not wholesale server import.
 - Candidate idea: import a skill only through existing admission/signature/provenance gates; metadata may be discoverable before trust, but scripts/resources cannot execute until admitted. Status: WATCH.
 
+## 2026-09-19 — cross-tool information-flow + voice-loop reliability expansion
+
+### piyushptiwari1/mcpkernel — MATERIAL CONCEPT / taint provenance across tool boundaries
+- Apache-2.0, Python, repository created 2026-03-21; GitHub metadata inspected 2026-09-19 shows last push 2026-06-16, 2 stars, 13 open issues: useful security research/reference, but adoption/activity are too weak for wholesale dependency.
+- Strong reusable delta not covered by simple per-call allow/deny: attach taint/provenance labels (secret, PII, untrusted-user, untrusted-tool-result) to data and propagate them across tool calls. A later outbound sink can then be denied even when that individual call looks harmless (e.g. local read -> derived value -> HTTP/email).
+- Upstream v0.3 design also scans tool results before they re-enter agent context and statically lints policy sets for duplicate/shadowed/unmatchable rules and unsafe regexes. These are valuable NEURA-native contracts.
+- Do NOT import the Python gateway/sandbox stack: it duplicates Warden, adds substantial dependencies, and upstream maintenance evidence is modest. Extract only information-flow labels + policy-lint semantics into the Go Warden.
+- Candidate acceptance tests: secret read then network/send sink => blocked; transformed/concatenated secret remains tainted; safe aggregate can be explicitly declassified only by a narrow policy; malicious tool-result instructions remain untrusted; policy shadowing/unreachable deny => lint failure; restart/replay preserves taint provenance. Benchmark Warden latency and memory overhead.
+- Cost target EUR 0. Status: PROPOSED, NOT PASS.
+
+### JenkinsRobotics/VoiceLLM — MATERIAL VOICE CONCEPT / self-speech rejection + two-pass STT
+- Fully offline voice-loop reference with two-pass fast->accurate STT, mic pause during TTS, similarity rejection against the assistant's last spoken reply, sentence-boundary streaming TTS and explicit interruptibility. Upstream targets Apple Silicon, so it is a design reference rather than a Windows dependency.
+- Useful NEURA delta: prevent the assistant from hearing its own TTS and recursively triggering actions. This is an AFFIDABILITA issue, not cosmetic UX.
+- Candidate Windows test after sherpa/Whisper pipeline exists: play NEURA TTS back into microphone at several volumes/noise levels and require zero privileged tool dispatches; verify barge-in/cancel; compare fast-first-pass latency vs accurate second-pass correction; no command execution until final transcript confidence/policy gate.
+- Status: PROPOSED TEST CONTRACT, NOT PASS.
+
+### SpandanNagale/ARIA and recent Windows Jarvis projects — WATCH / voice UX references
+- ARIA demonstrates Windows wake-word + push-to-talk fallback + HUD and documents a conservative wake threshold/tradeoff; however its recommended 14B model, CUDA/12GB-class GPU and Python/XTTS stack are too heavy for NEURA's lightweight baseline.
+- Reusable concept only: wake word must always have a deterministic push-to-talk fallback, visible listening/thinking/speaking state, and false-trigger benchmark. Do not copy runtime stack.
+
+### razzant/ouroboros — WATCH / reviewed self-evolution reference
+- Self-modifying agent with durable identity/history, separate review policy, patch artifacts, local GGUF option and Windows source/runtime support. It explicitly separates its own governance repository from external workspace runs and exports reviewable patches.
+- Useful NEURA delta is architectural confirmation: self-evolution should emit a patch/evidence bundle and require a distinct reviewer role before integration, rather than allowing the same worker to author and approve its core change.
+- Do not import wholesale: Python/uv plus broad provider/coding-harness integrations are heavier than NEURA's zero-cost minimal runtime, and upstream benchmark claims are self-reported until independently reproduced.
+- Status: WATCH / INDEPENDENT-REVIEW CONTRACT, NOT PASS.
+
 ## Candidate priority from scouting
-1. Reliability/security: pin MCP tool-definition fingerprints and invalidate capability leases on schema/description/list drift.
-2. Reliability: atomic mission claim + expiring lease + dependency/cycle gate for H24/subagent coordination.
-3. Reliability: path-level edit claims for concurrent workers, fail closed when coordination cannot be verified.
-4. Reliability: idempotency-key + intent/result journal; mutating tool calls are never blindly retried.
-5. Reliability: golden trace behavioral-diff regression gate.
-6. Reliability/privacy: read-only Windows UIA context envelope with untrusted-observed-content typing.
-7. Safety: deterministic orchestration separation, bounded-history compaction and dirty-worktree read-only guard.
-8. Safety: default-deny egress, MCP server-originated request denial, signed/redacted tool evidence.
-9. Performance/packaging: benchmark pure-Go static local inference only after reliability gates are green.
-10. Memory/skills: scoped memory and portable-skill interoperability after admission/provenance gates.
+1. Reliability/security: propagate taint/provenance across tool boundaries and block forbidden source->sink flows; lint Warden policy for shadowed/unreachable rules.
+2. Reliability/security: pin MCP tool-definition fingerprints and invalidate capability leases on schema/description/list drift.
+3. Reliability: atomic mission claim + expiring lease + dependency/cycle gate for H24/subagent coordination.
+4. Reliability: path-level edit claims for concurrent workers, fail closed when coordination cannot be verified.
+5. Reliability: idempotency-key + intent/result journal; mutating tool calls are never blindly retried.
+6. Reliability: golden trace behavioral-diff regression gate and independent reviewer for self-evolution patches.
+7. Voice reliability: self-speech rejection + two-pass STT + push-to-talk fallback before autonomous voice tool execution.
+8. Reliability/privacy: read-only Windows UIA context envelope with untrusted-observed-content typing.
+9. Safety: deterministic orchestration separation, bounded-history compaction and dirty-worktree read-only guard.
+10. Safety: default-deny egress, MCP server-originated request denial, signed/redacted tool evidence.
+11. Performance/packaging: benchmark pure-Go static local inference only after reliability gates are green.
+12. Memory/skills: scoped memory and portable-skill interoperability after admission/provenance gates.
 
 No item above is PASS merely because upstream claims it. All require NEURA-native tests/benchmarks in an isolated candidate before promotion.
