@@ -1,10 +1,5 @@
 name: Bootstrap C9.38 source
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/bootstrap-source.yml'
-      - 'bootstrap/EXPAND_SOURCE'
   workflow_dispatch:
 permissions:
   contents: write
