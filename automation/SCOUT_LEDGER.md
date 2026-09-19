@@ -66,12 +66,42 @@ Progressive technical scouting ledger. Re-check entries only for material new re
 - Useful NEURA delta: expand Warden adversarial regression corpus for PowerShell fetch-pipe-IEX, registry deletion, destructive volume commands, force-push and publish/secret mutations.
 - Do not import until license, false-positive rate, bypass resistance and runtime overhead are independently tested.
 
+## 2026-09-19 — multi-agent coordination / self-improvement safety expansion
+
+### Arjia-Labs/clu — MATERIAL CONCEPT / candidate design reference
+- MIT; pure-Go single binary; local SQLite through modernc.org/sqlite, no CGO/system database, no daemon/account/network required for the CLI path.
+- Reusable delta: atomic task claim using one transactional UPDATE/RETURNING path; dependency graph with cycle detection; TTL locks/heartbeats; explicit human-approval checkpoints; cascading cancellation; append-only work audit.
+- Why it matters to NEURA: the current H24 Mission Board is file-based and suitable for one bounded worker, but future subagents can race or duplicate a mission. Atomic claim + lease expiry would make mission ownership crash-safe without adding a cloud coordinator.
+- Do not import the whole tracker/UI. Reimplement the narrow claim/lease/dependency contract in NEURA's native coordination store.
+- Candidate acceptance tests: 50+ concurrent claim attempts yield one owner per mission; killed worker lease expires and mission becomes reclaimable; dependency cycles rejected; blocked approval cannot be bypassed; cancellation propagates; restart preserves state; stable/main writes remain impossible.
+- Benchmark: compare claim latency, binary/RAM delta and recovery time against current file Mission Board. Recurring cost target EUR 0.
+
+### phall1/blackbird — MATERIAL CONCEPT / path-conflict protection
+- Go + durable SQLite coordination with repository-scoped agents, tamper-evident event journal, secure resume tokens and shared/exclusive exact/subtree path claims with expiry/renewal/overlap detection.
+- Strong reusable delta: path claims before edits and generation numbers to stop two autonomous workers from silently editing overlapping files; refused claim is a normal bounded result rather than a retry-loop error. Also useful: health/status must handshake with the live daemon instead of trusting supervisor metadata, and support bundles redact secrets/home paths.
+- Upstream native release path currently targets macOS/Linux, so it is not a direct Windows dependency candidate.
+- Decision: extract semantics only. Add a NEURA candidate test where two workers request overlapping path sets; exactly one exclusive claimant may proceed, stale lease can be reclaimed, and an unreachable coordination layer must fail closed for autonomous writes (stricter than Blackbird's optional pre-commit courtesy guard).
+
+### davccavalcante/alkaline — CONCEPT ONLY / durable-loop guardrails
+- Apache-2.0; TypeScript/Node 20+, zero required runtime dependencies; deterministic replay, explicit non-deterministic steps, cycle/depth limits, token budgets, durable pause/resume/cancel, heartbeats and zombie reclaim.
+- Useful delta: continue-as-new/compaction for never-ending autonomous loops so event history remains bounded, plus explicit cycle/depth budgets independent of model judgement.
+- Reject stack import: Node runtime conflicts with NEURA's Go/single-runtime direction; upstream is extremely young and low-adoption, so its guarantees are reference material only.
+- Candidate idea: native Go bounded-history checkpoint/continue-as-new test with deterministic replay before and after compaction.
+
+### argszero/emrg — CONCEPT ONLY / self-evolution dirty-tree guard
+- MIT self-evolving experiment. Its evolution cycle modifies only its own evolution checkout, runs tests/import checks, rolls back failures, and forces read-only mode when the evolution repository has uncommitted changes.
+- Reusable delta: NEURA autonomous evolution should refuse mutation when its candidate workspace is dirty or provenance is ambiguous; it may audit/report but must not overwrite unexplained human/worker changes.
+- Do not import Python stack or treat its tests as NEURA evidence. Add a candidate negative test: dirty worktree => READ_ONLY, no source mutation, no promotion; clean isolated candidate => mutation allowed only through normal Warden/test gates.
+
 ## Candidate priority from scouting
-1. Reliability: idempotency-key + intent/result journal for externally mutating actions.
-2. Reliability: golden trace behavioral-diff regression gate.
-3. Reliability/privacy: NEURA-native read-only Windows UIA context envelope with untrusted-observed-content typing and metadata-only mode.
-4. Reliability: deterministic orchestration/non-deterministic activity separation audit.
-5. Safety: default-deny network egress and expanded Windows destructive-command negative tests.
-6. Memory: scope isolation + explainable/token-bounded recall benchmarks after reliability gates are green.
+1. Reliability: atomic mission claim + expiring lease + dependency/cycle gate for H24/subagent coordination.
+2. Reliability: path-level edit claims for concurrent workers, with fail-closed autonomous writes when coordination state cannot be verified.
+3. Reliability: idempotency-key + intent/result journal for externally mutating actions.
+4. Reliability: golden trace behavioral-diff regression gate.
+5. Reliability/privacy: NEURA-native read-only Windows UIA context envelope with untrusted-observed-content typing and metadata-only mode.
+6. Reliability: deterministic orchestration/non-deterministic activity separation plus bounded-history compaction.
+7. Safety: dirty candidate workspace forces autonomous evolution into read-only mode.
+8. Safety: default-deny network egress and expanded Windows destructive-command negative tests.
+9. Memory: scope isolation + explainable/token-bounded recall benchmarks after reliability gates are green.
 
 No item above is PASS merely because the upstream project claims it. All require NEURA-native tests/benchmarks in an isolated candidate before promotion.
