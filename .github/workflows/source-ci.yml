@@ -1,13 +1,6 @@
 name: NEURA Source CI
 on:
-  push:
-    branches:
-      - main
-      - stable
-      - 'candidate/**'
-    paths-ignore:
-      - 'bootstrap/**'
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
