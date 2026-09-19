@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "allowed_tools": [
+    "source_read",
+    "backend_chat",
+    "workspace_write",
+    "quality_gate",
+    "candidate_build",
+    "snapshot",
+    "source_promotion",
+    "binary_stage",
+    "local_ai",
+    "task_state",
+    "replay_store",
+    "regression_runner",
+    "repomap",
+    "skill_admission",
+    "capability_lock",
+    "trajectory_store",
+    "memory_os",
+    "delegation_admin"
+  ],
+  "allowed_roots": [
+    "capo_local/src",
+    "capo_data/evolution",
+    "capo_data/tasks",
+    "capo_data/audit",
+    "capo_data/replay",
+    "regression_corpus",
+    "capo_data/skill_admission",
+    "capo_data/neura-capabilities.lock",
+    "capo_data/trajectories",
+    "capo_data/memory_os",
+    "capo_data/delegations"
+  ],
+  "allowed_hosts": ["loopback"],
+  "allowed_processes": ["go", "go.exe", "gofmt", "gofmt.exe"],
+  "max_tool_calls": 10000,
+  "timeout_seconds": 300,
+  "budget_units": 100000,
+  "sandbox_required": true
+}
