@@ -1,27 +1,26 @@
 {
   "schema": 1,
-  "generated_at_utc": "2026-09-19T08:21:08.185518Z",
-  "valid_until_utc": "2026-09-19T09:21:08.185518Z",
+  "generated_at_utc": "2026-09-19T09:20:03.108187Z",
+  "valid_until_utc": "2026-09-19T10:20:03.108187Z",
   "branch": "main",
-  "head_sha": "7add889051e6a18e0d0595249cb4f968a8ad794c",
+  "head_sha": "f16d38d971ba72644c74ba278d14897203f611e9",
   "window_minutes": 75,
-  "commits_in_window": 3,
+  "commits_in_window": 1,
   "changed_files": [
     "automation/MISSION_BOARD.md",
-    "automation/SCOUT_LEDGER.md",
     "automation/mission_board.json",
     "automation/state/supervisor_state.json"
   ],
-  "activity_controlled": "DEPENDENCIES_LICENSE_SUPPLY_CHAIN",
+  "activity_controlled": "WINDOWS_COMPATIBILITY",
   "focus_scores": {
-    "CODE_TEST": 0.648,
-    "SECURITY_WARDEN_SANDBOX": 1.348,
-    "MEMORY_TEMPORAL": 1.032,
-    "REPLAY_RECOVERY_ROLLBACK": 8.03,
-    "PERFORMANCE_RESOURCES": 8.04,
-    "WINDOWS_COMPATIBILITY": 8.05,
-    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 8.06,
-    "VOICE_UX_COMPUTER_USE": -2.585
+    "CODE_TEST": 0.986,
+    "SECURITY_WARDEN_SANDBOX": 1.686,
+    "MEMORY_TEMPORAL": 1.369,
+    "REPLAY_RECOVERY_ROLLBACK": 8.04,
+    "PERFORMANCE_RESOURCES": 8.05,
+    "WINDOWS_COMPATIBILITY": 8.06,
+    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": -2.603,
+    "VOICE_UX_COMPUTER_USE": 0.672
   },
   "rules": {
     "one_macro_area_per_candidate_run": true,
@@ -53,23 +52,23 @@
       "status": "PENDING"
     },
     {
-      "id": "DEP-1",
+      "id": "WIN-1",
       "priority": "HIGH",
-      "objective": "Controllare nuove dipendenze, licenze, provenienza, version pinning e superficie supply-chain.",
+      "objective": "Controllare path, processi, ACL/DPAPI, build tags e assunzioni Windows introdotte dai diff recenti.",
       "kind": "REPORT_ONLY",
       "status": "PENDING"
     },
     {
-      "id": "DEP-2",
+      "id": "WIN-2",
       "priority": "HIGH",
-      "objective": "Verificare che ogni dipendenza nuova sia necessaria, offline-compatible e coerente con EUR 0.",
+      "objective": "Eseguire cross-build Windows e, sul runner Windows, smoke/test nativi pertinenti.",
       "kind": "VERIFY",
       "status": "PENDING"
     },
     {
-      "id": "DEP-3",
+      "id": "WIN-3",
       "priority": "HIGH",
-      "objective": "Rimuovere o sostituire soltanto dipendenze con rischio dimostrato; nessun upgrade cosmetico.",
+      "objective": "Correggere solo incompatibilita riproducibili; UNKNOWN Windows resta UNKNOWN finche non testato nativamente.",
       "kind": "CODE_IF_EVIDENCE",
       "status": "PENDING"
     }
