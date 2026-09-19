@@ -1,0 +1,36 @@
+name: NEURA Source CI
+on:
+  push:
+    branches:
+      - main
+      - stable
+      - 'candidate/**'
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Formatting check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l capo_local/src)" || { gofmt -l capo_local/src; exit 1; }
+      - name: Vet
+        working-directory: capo_local/src
+        run: go vet ./...
+      - name: Source regression gate
+        working-directory: capo_local/src
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease' ./...
+      - name: Artifact-only gate status
+        run: |
+          echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_IN_SOURCE_CI'
+          echo 'Static recovery ZIP is verified only by the full release gate on the Windows runner.'
