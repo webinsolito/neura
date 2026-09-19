@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "product": "NEURA",
+  "version": "0.40.38-c9.38-external-warden-capability-leases",
+  "candidate": true,
+  "parent_artifact": "NEURA_C9_37_CANDIDATE_COMPETITION_LEAN_DELIVERY.zip",
+  "parent_sha256": "4ba53ef50d3f4597f698da231b4f18a345733a7df73d28b48ebc2f7e2d409d51",
+  "policy": "external warden is required in shipped config; every privileged action first receives a bounded single-use short-TTL capability lease from a separate process with pinned fail-closed policy and an independent hash-chained audit ledger; internal Safety/Trust gates remain mandatory; stable remains protected"
+}
