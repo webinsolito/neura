@@ -29,8 +29,10 @@ jobs:
         run: go vet ./...
       - name: Source regression gate
         working-directory: capo_local/src
-        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease' ./...
-      - name: Artifact-only gate status
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+      - name: Environment-limited gate status
         run: |
           echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_IN_SOURCE_CI'
-          echo 'Static recovery ZIP is verified only by the full release gate on the Windows runner.'
+          echo 'TestWindowsBootstrapC927Contract=NOT_VERIFIED_IN_SOURCE_CI'
+          echo 'TestCleanWindowsReadinessHarnessExists=NOT_VERIFIED_IN_SOURCE_CI'
+          echo 'These are verified by the full Windows release/runtime gate, not reinterpreted as PASS.'
