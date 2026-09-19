@@ -1,0 +1,7 @@
+{
+  "id": "RG",
+  "kind": "model_fabric_model_identity_mismatch_denied",
+  "title": "Model Fabric denies wrong model identity even if health is green",
+  "source_version": "0.40.38-c9.38-local-model-fabric-2026",
+  "severity": "HIGH"
+}
