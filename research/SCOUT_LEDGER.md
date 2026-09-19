@@ -22,6 +22,31 @@ Purpose: progressive technical scouting ledger. Do not repeatedly re-evaluate th
 - Risk: native/ONNX dependencies and model footprint; integration must not weaken cancellation, sandbox or capability leases.
 - Decision: PROPOSE + BENCHMARK. No automatic voice-stack replacement.
 
+### augentic/omnia — MATERIAL / CANDIDATE ARCHITECTURE MISSION
+- Active: repository pushed 2026-09-19; Apache-2.0; Rust/Wasmtime/WASI. v0.32.0 (2026-06-05) upgraded Wasmtime to 45 and patched dependency audit findings.
+- Reusable concept: **capability-scoped WASI sandbox for generated/portable skills**. Guest code receives only explicit filesystem/network/model/storage capabilities instead of inheriting the host process environment.
+- Fit vs NEURA: complements the existing Warden + capability leases by adding a second execution boundary for untrusted generated skill code. Do not replace Warden or internal Safety/Trust gates.
+- Windows/offline: Wasmtime/WASI is cross-platform and local; Windows-native NEURA compatibility still requires a real benchmark and packaging test before any adoption.
+- Dependencies/weight: Rust/Wasmtime stack is materially heavier than NEURA's current Go-only path; this is the main cost and may conflict with the single-file goal.
+- Recurring cost: EUR 0.
+- Security upside: least-authority guest execution, explicit capabilities, stronger blast-radius containment for self-generated code.
+- Decision: MATERIAL CONCEPT. Create only a candidate spike/benchmark: compare current process isolation vs a minimal WASI skill runner on startup latency, RAM, binary size, filesystem/network escape negatives, cancellation and Warden lease enforcement. Reject if reliability gain is not clear or packaging becomes materially worse.
+
+### viant/sqlite-vec — WATCH / MEMORY BENCHMARK CANDIDATE
+- New/small project (13 commits observed), Apache-2.0, pure Go 1.24+, CGO-free via modernc.org/sqlite.
+- Reusable concept: single-file local vector retrieval with mandatory dataset_id isolation, persisted indexes and automatic invalidation; this maps well to NEURA's project/memory isolation requirement.
+- Positive fit: no external vector server and no loadable SQLite extension; easier Windows/single-binary packaging than many vector stores.
+- Risk: young project and experimental index implementations; insufficient maturity to replace NEURA memory retrieval without A/B evidence.
+- Recurring cost: EUR 0.
+- Decision: WATCH + future benchmark only when memory retrieval becomes the active focus; do not integrate this cycle.
+
+### agentkitai/agentlens — CONCEPT ONLY / AUDIT HARDENING
+- MIT, self-hosted SQLite, tamper-evident SHA-256 event chains, replay and A/B comparison.
+- NEURA C9.38 already has hash-chained Warden audit/replay concepts, so importing the Node/pnpm service would duplicate infrastructure.
+- Reusable concept: add a deterministic **tamper test** to NEURA's own flight recorder: mutate/delete/reorder one persisted event and require verification to identify the first broken event, plus export a signed/verifiable incident snapshot.
+- Recurring cost: EUR 0 if local.
+- Decision: copy the verification idea, not the stack. Queue as a native Go anti-regression test after current CI is healthy.
+
 ### OpenHands/OpenHands — CONCEPT ONLY
 - Active; v1.14.0 published 2026-08-17; core repository MIT (enterprise directory has separate terms).
 - Reusable concepts: structured error outcomes, activity-log export, validated model profiles, Git-sync UX.
