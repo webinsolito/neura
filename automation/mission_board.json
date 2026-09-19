@@ -1,26 +1,27 @@
 {
   "schema": 1,
-  "generated_at_utc": "2026-09-19T09:20:03.108187Z",
-  "valid_until_utc": "2026-09-19T10:20:03.108187Z",
+  "generated_at_utc": "2026-09-19T10:19:39.409672Z",
+  "valid_until_utc": "2026-09-19T11:19:39.409672Z",
   "branch": "main",
-  "head_sha": "f16d38d971ba72644c74ba278d14897203f611e9",
+  "head_sha": "1a5236e87bf5ec8661f836fecc6829bce944580d",
   "window_minutes": 75,
-  "commits_in_window": 1,
+  "commits_in_window": 2,
   "changed_files": [
     "automation/MISSION_BOARD.md",
+    "automation/SCOUT_LEDGER.md",
     "automation/mission_board.json",
     "automation/state/supervisor_state.json"
   ],
-  "activity_controlled": "WINDOWS_COMPATIBILITY",
+  "activity_controlled": "PERFORMANCE_RESOURCES",
   "focus_scores": {
-    "CODE_TEST": 0.986,
-    "SECURITY_WARDEN_SANDBOX": 1.686,
-    "MEMORY_TEMPORAL": 1.369,
-    "REPLAY_RECOVERY_ROLLBACK": 8.04,
-    "PERFORMANCE_RESOURCES": 8.05,
-    "WINDOWS_COMPATIBILITY": 8.06,
-    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": -2.603,
-    "VOICE_UX_COMPUTER_USE": 0.672
+    "CODE_TEST": 1.327,
+    "SECURITY_WARDEN_SANDBOX": 2.027,
+    "MEMORY_TEMPORAL": 1.711,
+    "REPLAY_RECOVERY_ROLLBACK": 8.05,
+    "PERFORMANCE_RESOURCES": 8.06,
+    "WINDOWS_COMPATIBILITY": -2.599,
+    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 0.658,
+    "VOICE_UX_COMPUTER_USE": 1.014
   },
   "rules": {
     "one_macro_area_per_candidate_run": true,
@@ -52,23 +53,23 @@
       "status": "PENDING"
     },
     {
-      "id": "WIN-1",
+      "id": "PERF-1",
       "priority": "HIGH",
-      "objective": "Controllare path, processi, ACL/DPAPI, build tags e assunzioni Windows introdotte dai diff recenti.",
+      "objective": "Misurare solo metriche pertinenti alle modifiche: tempo, RAM, allocazioni, dimensione binario o startup.",
       "kind": "REPORT_ONLY",
       "status": "PENDING"
     },
     {
-      "id": "WIN-2",
+      "id": "PERF-2",
       "priority": "HIGH",
-      "objective": "Eseguire cross-build Windows e, sul runner Windows, smoke/test nativi pertinenti.",
+      "objective": "Confrontare candidate vs baseline usando lo stesso benchmark; nessun punteggio inventato.",
       "kind": "VERIFY",
       "status": "PENDING"
     },
     {
-      "id": "WIN-3",
+      "id": "PERF-3",
       "priority": "HIGH",
-      "objective": "Correggere solo incompatibilita riproducibili; UNKNOWN Windows resta UNKNOWN finche non testato nativamente.",
+      "objective": "Ottimizzare soltanto regressioni misurate e senza ridurre affidabilita.",
       "kind": "CODE_IF_EVIDENCE",
       "status": "PENDING"
     }
