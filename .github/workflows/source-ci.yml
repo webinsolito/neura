@@ -5,6 +5,8 @@ on:
       - main
       - stable
       - 'candidate/**'
+    paths-ignore:
+      - 'bootstrap/**'
   pull_request:
 permissions:
   contents: read
