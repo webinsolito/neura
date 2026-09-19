@@ -1,0 +1,300 @@
++	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.Endpoint, "/")+"/v1/chat/completions", bytes.NewReader(payload))
++	req.Header.Set("Content-Type", "application/json")
++	resp, err := s.client.Do(req)
++	if err != nil {
++		if b := s.modelFabric.breakerFor(c.ID); b != nil {
++			b.Failure()
+ 		}
++		return "", err
++	}
++	defer resp.Body.Close()
++	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
++	if err != nil {
++		return "", err
++	}
++	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
++		if b := s.modelFabric.breakerFor(c.ID); b != nil {
++			b.Failure()
++		}
++		return "", fmt.Errorf("IA locale %s HTTP %d: %s", c.ID, resp.StatusCode, compact(raw, 500))
++	}
++	var lr LlamaResponse
++	if err := json.Unmarshal(raw, &lr); err != nil {
++		return "", err
++	}
++	if len(lr.Choices) == 0 {
++		return "", errors.New("IA locale senza choices")
++	}
++	if b := s.modelFabric.breakerFor(c.ID); b != nil {
++		b.Success()
++	}
++	return cleanModelReply(lr.Choices[0].Message.Content), nil
++}
++
++// callLocalModel is the single inference entry point for local chat. C9.38 makes
++// it task-aware and runtime-agnostic while keeping every route local and zero-cost.
++func (s *Server) callLocalModel(ctx context.Context, user string, backend BackendChatResponse, rawBackend []byte, runtimeState string, history []HistoryEntry, memoryBlock, skillBlock string) (string, error) {
++	route, ok := s.selectLocalModelRoute(ctx, ModelTaskChat)
++	if !ok {
++		return "", errors.New("nessun runtime locale zero-cost OpenAI-compatible disponibile")
++	}
++	if route.Candidate.ID == "llama.cpp" {
+ 		out, err := s.callLlama(ctx, user, backend, rawBackend, runtimeState, history, memoryBlock, skillBlock)
+-		if s.modelFabric.breaker != nil {
++		if b := s.modelFabric.breakerFor(route.Candidate.ID); b != nil {
+ 			if err != nil {
+-				s.modelFabric.breaker.Failure()
++				b.Failure()
+ 			} else {
+-				s.modelFabric.breaker.Success()
++				b.Success()
+ 			}
+ 		}
+ 		return out, err
+-	default:
+-		return "", errors.New("runtime selezionato senza adapter NEURA: " + candidate.ID)
+ 	}
++	// Preserve CAPO prompt semantics for alternate OpenAI-compatible local models
++	// by delegating through the same request format, with a compact authoritative
++	// context. The deterministic backend remains the source of truth.
++	var contextText strings.Builder
++	contextText.WriteString("MESSAGGIO UTENTE:\n")
++	contextText.WriteString(user)
++	contextText.WriteString("\n\nBACKEND NEURA (fonte di verita):\n")
++	if len(rawBackend) > 0 {
++		contextText.Write(rawBackend)
++	} else {
++		enc, _ := json.Marshal(backend)
++		contextText.Write(enc)
++	}
++	if runtimeState != "" {
++		contextText.WriteString("\n\nRUNTIME:\n" + runtimeState)
++	}
++	if memoryBlock != "" {
++		contextText.WriteString("\n\n" + memoryBlock)
++	}
++	if skillBlock != "" {
++		contextText.WriteString("\n\n" + skillBlock)
++	}
++	if len(history) > 0 {
++		contextText.WriteString("\n\nULTIMI SCAMBI LOCALI:\n")
++		for _, h := range history {
++			contextText.WriteString("Utente: " + h.User + "\nCAPO: " + h.Reply + "\n---\n")
++		}
++	}
++	system := "Sei CAPO, IA locale centrale di NEURA. Rispondi in italiano. Il backend NEURA e la fonte di verita: non inventare azioni eseguite o test superati. Nessun cloud/API a pagamento. Sii concreto."
++	reqBody := LlamaRequest{Model: route.Candidate.Model, Messages: []LlamaMessage{{Role: "system", Content: system}, {Role: "user", Content: contextText.String()}}, Temperature: s.cfg.Temperature, MaxTokens: s.cfg.MaxTokens, Stream: false}
++	payload, _ := json.Marshal(reqBody)
++	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(route.Candidate.Endpoint, "/")+"/v1/chat/completions", bytes.NewReader(payload))
++	req.Header.Set("Content-Type", "application/json")
++	resp, err := s.client.Do(req)
++	if err != nil {
++		s.modelFabric.breakerFor(route.Candidate.ID).Failure()
++		return "", err
++	}
++	defer resp.Body.Close()
++	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
++	if err != nil {
++		return "", err
++	}
++	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
++		s.modelFabric.breakerFor(route.Candidate.ID).Failure()
++		return "", fmt.Errorf("modello locale %s HTTP %d: %s", route.Candidate.ID, resp.StatusCode, compact(raw, 300))
++	}
++	var parsed LlamaResponse
++	if err := json.Unmarshal(raw, &parsed); err != nil || len(parsed.Choices) == 0 {
++		return "", errors.New("risposta modello locale non valida")
++	}
++	text := cleanModelReply(parsed.Choices[0].Message.Content)
++	if text == "" {
++		return "", errors.New("risposta modello locale vuota")
++	}
++	s.modelFabric.breakerFor(route.Candidate.ID).Success()
++	return text, nil
+ }
+ 
+ func (s *Server) handleModelFabric(w http.ResponseWriter, r *http.Request) {
+@@ -129,6 +533,5 @@ func (s *Server) handleModelFabric(w http.ResponseWriter, r *http.Request) {
+ 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ready": false, "error": "model_fabric_non_inizializzato"})
+ 		return
+ 	}
+-	healthy := s.checkURL(r.Context(), strings.TrimRight(s.cfg.LlamaURL, "/")+"/health")
+-	writeJSON(w, http.StatusOK, s.modelFabric.Status(healthy))
++	writeJSON(w, http.StatusOK, s.modelFabric.LiveStatus(r.Context(), s.client, s.cfg.LlamaURL, s.cfg.LlamaModel))
+ }
+diff --git a/capo_local/src/model_fabric_2026_benchmark_test.go b/capo_local/src/model_fabric_2026_benchmark_test.go
+new file mode 100644
+index 0000000..df05fd3
+--- /dev/null
++++ b/capo_local/src/model_fabric_2026_benchmark_test.go
+@@ -0,0 +1,18 @@
++package main
++
++import "testing"
++
++func BenchmarkModelFabricTaskScoreC938(b *testing.B) {
++	c := ModelRuntimeCandidate{ID: "bonsai2-27b", Priority: 120, Capabilities: []string{"chat", "planning", "coding", "test_author"}}
++	b.ReportAllocs()
++	for i := 0; i < b.N; i++ {
++		_ = modelTaskPriority(c, ModelTaskCoding)
++	}
++}
++
++func BenchmarkModelFabricLoopbackAdmissionC938(b *testing.B) {
++	b.ReportAllocs()
++	for i := 0; i < b.N; i++ {
++		_, _ = localOnlyEndpoint("http://127.0.0.1:8781")
++	}
++}
+diff --git a/capo_local/src/model_fabric_test.go b/capo_local/src/model_fabric_test.go
+index f706958..a3b1e99 100644
+--- a/capo_local/src/model_fabric_test.go
++++ b/capo_local/src/model_fabric_test.go
+@@ -1,9 +1,15 @@
+ package main
+ 
+ import (
++	"context"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
+ 	"os"
+ 	"path/filepath"
++	"strings"
+ 	"testing"
++	"time"
+ )
+ 
+ func TestModelFabricPrefersHealthyLocalZeroCost(t *testing.T) {
+@@ -40,3 +46,144 @@ func TestModelFabricDoesNotSelectDiscoveredUnimplementedRuntime(t *testing.T) {
+ 		t.Fatal("unimplemented discovered runtime must not be selected")
+ 	}
+ }
++
++func TestModelFabricRejectsNonLoopbackProviderConfig(t *testing.T) {
++	t.Setenv("NEURA_BONSAI_URL", "https://example.com:9999")
++	m := OpenModelFabric(t.TempDir(), "http://127.0.0.1:8771", "primary")
++	for _, c := range m.Candidates(false) {
++		if c.ID == "bonsai2-27b" {
++			if c.Endpoint != "" || c.Discovered || c.Usable {
++				t.Fatalf("remote provider must be rejected: %+v", c)
++			}
++			return
++		}
++	}
++	t.Fatal("bonsai candidate missing")
++}
++
++func testOpenAIModelServer(t *testing.T, modelIDs []string, content string) *httptest.Server {
++	t.Helper()
++	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		switch r.URL.Path {
++		case "/health":
++			w.WriteHeader(http.StatusOK)
++			_, _ = w.Write([]byte(`{"ok":true}`))
++		case "/v1/models":
++			data := make([]map[string]string, 0, len(modelIDs))
++			for _, id := range modelIDs {
++				data = append(data, map[string]string{"id": id})
++			}
++			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
++		case "/v1/chat/completions":
++			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}}})
++		default:
++			http.NotFound(w, r)
++		}
++	}))
++}
++
++func TestModelFabricTaskAwareBonsaiAndBitNetRouting(t *testing.T) {
++	models := testOpenAIModelServer(t, []string{"Bonsai-2-27B", "BitNet-b1.58-2B-4T"}, `{"ok":true}`)
++	defer models.Close()
++	t.Setenv("NEURA_BONSAI_URL", models.URL)
++	t.Setenv("NEURA_BITNET_URL", models.URL)
++	t.Setenv("NEURA_GPTOSS_URL", "")
++	t.Setenv("NEURA_QWEN_URL", "")
++	m := OpenModelFabric(t.TempDir(), "http://127.0.0.1:1", "primary")
++	client := &http.Client{Timeout: 2 * time.Second}
++
++	coding, ok := m.SelectRoute(context.Background(), client, ModelTaskCoding, "http://127.0.0.1:1", "primary")
++	if !ok || coding.Candidate.ID != "bonsai2-27b" {
++		t.Fatalf("coding route=%+v ok=%t", coding, ok)
++	}
++	routing, ok := m.SelectRoute(context.Background(), client, ModelTaskRouting, "http://127.0.0.1:1", "primary")
++	if !ok || routing.Candidate.ID != "bitnet" {
++		t.Fatalf("routing route=%+v ok=%t", routing, ok)
++	}
++}
++
++func TestModelFabricRejectsModelMismatchAndFallsBack(t *testing.T) {
++	wrong := testOpenAIModelServer(t, []string{"not-bonsai"}, `{"bad":true}`)
++	defer wrong.Close()
++	primary := testOpenAIModelServer(t, []string{"primary"}, `{"fallback":true}`)
++	defer primary.Close()
++	t.Setenv("NEURA_BONSAI_URL", wrong.URL)
++	t.Setenv("NEURA_BITNET_URL", "")
++	t.Setenv("NEURA_GPTOSS_URL", "")
++	t.Setenv("NEURA_QWEN_URL", "")
++	m := OpenModelFabric(t.TempDir(), primary.URL, "primary")
++	route, ok := m.SelectRoute(context.Background(), &http.Client{Timeout: 2 * time.Second}, ModelTaskCoding, primary.URL, "primary")
++	if !ok || route.Candidate.ID != "llama.cpp" {
++		t.Fatalf("mismatched provider must not win; route=%+v ok=%t", route, ok)
++	}
++}
++
++func TestModelFabricGenericJSONAdapterUsesSelectedLocalModel(t *testing.T) {
++	server := testOpenAIModelServer(t, []string{"Bonsai-2-27B"}, `{"selected":"bonsai"}`)
++	defer server.Close()
++	t.Setenv("NEURA_BONSAI_URL", server.URL)
++	t.Setenv("NEURA_BITNET_URL", "")
++	t.Setenv("NEURA_GPTOSS_URL", "")
++	t.Setenv("NEURA_QWEN_URL", "")
++	s := &Server{cfg: defaultConfig(), rootDir: t.TempDir(), client: &http.Client{Timeout: 2 * time.Second}}
++	s.cfg.LlamaURL = "http://127.0.0.1:1"
++	s.cfg.LlamaModel = "primary"
++	s.modelFabric = OpenModelFabric(s.rootDir, s.cfg.LlamaURL, s.cfg.LlamaModel)
++	route, ok := s.selectLocalModelRoute(context.Background(), ModelTaskTestAuthor)
++	if !ok || route.Candidate.ID != "bonsai2-27b" {
++		t.Fatalf("route=%+v ok=%t", route, ok)
++	}
++	out, err := s.callOpenAICompatibleJSON(context.Background(), route, "{}", 64)
++	if err != nil || !strings.Contains(out, `"selected":"bonsai"`) {
++		t.Fatalf("out=%q err=%v", out, err)
++	}
++}
++
++func TestEvolutionRoleTaskMappingC938(t *testing.T) {
++	cases := map[string]ModelTask{"architect": ModelTaskPlanning, "planner": ModelTaskPlanning, "test_author": ModelTaskTestAuthor, "editor": ModelTaskCoding, "repairer": ModelTaskCoding}
++	for role, want := range cases {
++		if got := taskForEvolutionRole(role); got != want {
++			t.Fatalf("role=%s got=%s want=%s", role, got, want)
++		}
++	}
++}
++
++func TestEvolutionCallLocalJSONUsesAlternateLocalProviderC938(t *testing.T) {
++	var completions int
++	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		switch r.URL.Path {
++		case "/v1/models":
++			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": "Bonsai-2-27B"}}})
++		case "/v1/chat/completions":
++			completions++
++			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": `{"provider":"bonsai"}`}}}})
++		default:
++			http.NotFound(w, r)
++		}
++	}))
++	defer ai.Close()
++	t.Setenv("NEURA_BONSAI_URL", ai.URL)
++	t.Setenv("NEURA_BONSAI_MODEL", "Bonsai-2-27B")
++	t.Setenv("NEURA_GPTOSS_URL", "")
++	t.Setenv("NEURA_QWEN_URL", "")
++	t.Setenv("NEURA_BITNET_URL", "")
++
++	root := t.TempDir()
++	writeTestCapabilities(t, root)
++	srv := &Server{cfg: defaultConfig(), rootDir: root, client: &http.Client{Timeout: 2 * time.Second}, providerKeys: map[string]string{}, providerHealth: map[string]*providerHealthState{}}
++	srv.cfg.LlamaURL = "http://127.0.0.1:1"
++	srv.cfg.LlamaModel = "primary-down"
++	srv
