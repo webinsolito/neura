@@ -40,11 +40,38 @@ Progressive technical scouting ledger. Re-check entries only for material new re
 - Useful NEURA delta: evidence selection should expose why each memory entered context and enforce token budget.
 - TypeScript engine is not a direct runtime fit; extract semantics, not stack.
 
-## Candidate priority from this scan
+## 2026-09-19 — Windows context / privacy boundary expansion
+
+### YSCJRH/WinChronicle — PROPOSE / extract boundary contracts
+- Windows-first, local-first UI Automation context memory; MIT; Python 3.11+ plus .NET UIA helpers; no cloud required.
+- Latest inspected release: v0.2.68 (2026-06-29); repository pushed 2026-07-01. Release evidence reports Windows harness + manual UIA smoke. Small adoption footprint means upstream claims must be independently reproduced.
+- Strong reusable delta for NEURA: structured UIA metadata before screenshots/OCR; observed UI content explicitly typed as untrusted; fixed read-only context interface; metadata-only mode; confidence/limitations/provenance fields; paths derived from sanitized local session IDs rather than marker-controlled external paths; bounded finite work sessions rather than default background capture.
+- Do not import wholesale: Python + .NET helper stack conflicts with NEURA single-binary/Go direction and the project intentionally does not provide desktop control.
+- Candidate experiment only: implement a NEURA-native read-only UIA context envelope with fields source/provenance/confidence/limitations/trust=untrusted_observed_content and a metadata-only mode. It must have zero write/control capability and sit outside action execution.
+- Required tests before acceptance: malicious UI text cannot become instructions; path/session traversal rejected; no screenshots/OCR/clipboard/audio/network in metadata-only mode; UIA helper failure is fail-closed; Notepad/Edge smoke on real Windows; VS Code/Monaco limitation remains explicit UNKNOWN where UIA coverage is insufficient; RAM/latency benchmark against no-context baseline.
+- Expected recurring cost: EUR 0. License permits reuse, but prefer native reimplementation of the narrow contracts rather than dependency import.
+
+### Beledarian/mcp-local-memory — WATCH / memory benchmark
+- Local-first SQLite FTS5 + optional sqlite-vec, graph entities/relations, temporal filtering and auditable lifecycle.
+- Useful comparison target: time-decayed ranking without rewriting importance on every recall; explicit outdated/incorrect/restored states.
+- No integration decision until license, Windows packaging and benchmark are independently verified.
+
+### Sardor-M/lumen — WATCH / scoped-memory reference
+- Local SQLite knowledge graph + hybrid retrieval + scope_kind/scope_key isolation + PII scrub + replayable trajectories.
+- Useful NEURA delta: hard scope keys on every memory row and secret/PII scrub before journal persistence.
+- No wholesale import; deeper license/dependency/Windows validation required.
+
+### AperionAI/shield — WATCH / negative-test corpus reference
+- Local MCP guardrail project with explicit Windows/PowerShell destructive-command coverage and install/runtime scanning claims.
+- Useful NEURA delta: expand Warden adversarial regression corpus for PowerShell fetch-pipe-IEX, registry deletion, destructive volume commands, force-push and publish/secret mutations.
+- Do not import until license, false-positive rate, bypass resistance and runtime overhead are independently tested.
+
+## Candidate priority from scouting
 1. Reliability: idempotency-key + intent/result journal for externally mutating actions.
 2. Reliability: golden trace behavioral-diff regression gate.
-3. Reliability: deterministic orchestration/non-deterministic activity separation audit.
-4. Safety: default-deny network egress test matrix and dry-run/reversibility contract.
-5. Memory: explainable/token-bounded recall benchmark only after reliability gates are green.
+3. Reliability/privacy: NEURA-native read-only Windows UIA context envelope with untrusted-observed-content typing and metadata-only mode.
+4. Reliability: deterministic orchestration/non-deterministic activity separation audit.
+5. Safety: default-deny network egress and expanded Windows destructive-command negative tests.
+6. Memory: scope isolation + explainable/token-bounded recall benchmarks after reliability gates are green.
 
 No item above is PASS merely because the upstream project claims it. All require NEURA-native tests/benchmarks in an isolated candidate before promotion.
