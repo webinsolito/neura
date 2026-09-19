@@ -20,13 +20,16 @@ jobs:
         with:
           ref: candidate/autonomy
           fetch-depth: 0
-      - name: Expand sanitized C9.38 repository seed
+      - name: Reassemble and verify C9.38 core source
         shell: bash
         run: |
           set -euo pipefail
-          test -f bootstrap/c9_38_source.tar.gz
-          tar -xzf bootstrap/c9_38_source.tar.gz
-          rm -f bootstrap/c9_38_source.tar.gz
+          test "$(find bootstrap -maxdepth 1 -name 'core.b64.part-*' | wc -l)" -eq 15
+          cat $(find bootstrap -maxdepth 1 -name 'core.b64.part-*' | sort) > /tmp/core.b64
+          base64 -d /tmp/core.b64 > /tmp/c9_38_core.tar.xz
+          echo "9cb433eb74d5d44207f9d61cde55d75e7ee2b33bf2f7d6ceb8f59adf77e627ee  /tmp/c9_38_core.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/c9_38_core.tar.xz
+          rm -f bootstrap/c9_38_source.tar.gz bootstrap/core.b64.part-*
       - name: Commit expanded source
         shell: bash
         run: |
@@ -38,5 +41,5 @@ jobs:
             echo 'No bootstrap changes.'
             exit 0
           fi
-          git commit -m 'bootstrap: expand sanitized C9.38 source tree'
+          git commit -m 'bootstrap: expand verified C9.38 core source tree'
           git push origin HEAD:candidate/autonomy
