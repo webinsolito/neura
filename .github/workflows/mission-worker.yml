@@ -1,0 +1,27 @@
+name: NEURA Mission Worker
+on:
+  schedule:
+    - cron: '22,37,52 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: neura-mission-worker
+  cancel-in-progress: false
+jobs:
+  work:
+    if: ${{ vars.NEURA_H24_WORKER_ENABLED == 'true' }}
+    runs-on: [self-hosted, Windows, X64, neura]
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: candidate/autonomy
+          fetch-depth: 0
+      - name: Execute one bounded mission
+        shell: powershell
+        env:
+          NEURA_H24_WORKER_ENABLED: '1'
+          NEURA_H24_WORKER_CMD: ${{ vars.NEURA_H24_WORKER_CMD }}
+        run: ./automation/mission_worker.ps1
