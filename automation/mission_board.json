@@ -1,27 +1,26 @@
 {
   "schema": 1,
-  "generated_at_utc": "2026-09-19T05:18:57.163225Z",
-  "valid_until_utc": "2026-09-19T06:18:57.163225Z",
+  "generated_at_utc": "2026-09-19T06:24:25.124058Z",
+  "valid_until_utc": "2026-09-19T07:24:25.124058Z",
   "branch": "main",
-  "head_sha": "484a74f419dd1bc29fcc7a881c942edfeba08234",
+  "head_sha": "60f9022c2e404dd2286df97da4d67e1d9b2b3855",
   "window_minutes": 75,
-  "commits_in_window": 3,
+  "commits_in_window": 1,
   "changed_files": [
     "automation/MISSION_BOARD.md",
     "automation/mission_board.json",
-    "automation/state/supervisor_state.json",
-    "research/SCOUT_LEDGER.md"
+    "automation/state/supervisor_state.json"
   ],
-  "activity_controlled": "MEMORY_TEMPORAL",
+  "activity_controlled": "CODE_TEST",
   "focus_scores": {
-    "CODE_TEST": 8.05,
-    "SECURITY_WARDEN_SANDBOX": -2.614,
-    "MEMORY_TEMPORAL": 8.07,
-    "REPLAY_RECOVERY_ROLLBACK": 8.0,
-    "PERFORMANCE_RESOURCES": 8.01,
-    "WINDOWS_COMPATIBILITY": 8.02,
-    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 8.03,
-    "VOICE_UX_COMPUTER_USE": 8.04
+    "CODE_TEST": 8.06,
+    "SECURITY_WARDEN_SANDBOX": 0.76,
+    "MEMORY_TEMPORAL": -2.636,
+    "REPLAY_RECOVERY_ROLLBACK": 8.01,
+    "PERFORMANCE_RESOURCES": 8.02,
+    "WINDOWS_COMPATIBILITY": 8.03,
+    "DEPENDENCIES_LICENSE_SUPPLY_CHAIN": 8.04,
+    "VOICE_UX_COMPUTER_USE": 8.05
   },
   "rules": {
     "one_macro_area_per_candidate_run": true,
@@ -53,23 +52,23 @@
       "status": "PENDING"
     },
     {
-      "id": "MEM-1",
+      "id": "CT-1",
       "priority": "HIGH",
-      "objective": "Controllare provenance, supersedence, contaminazione cross-project e integrita memoria dopo i cambiamenti recenti.",
+      "objective": "Controllare diff e test toccati nell'ultima ora; cercare test deboli, regressioni o codice duplicato.",
       "kind": "REPORT_ONLY",
       "status": "PENDING"
     },
     {
-      "id": "MEM-2",
+      "id": "CT-2",
       "priority": "HIGH",
-      "objective": "Eseguire regression memory e verificare che memorie obsolete/revocate non guidino nuove decisioni.",
+      "objective": "Eseguire source gate mirato sulle aree modificate e classificare PASS/FAIL/UNKNOWN senza reinterpretazioni.",
       "kind": "VERIFY",
       "status": "PENDING"
     },
     {
-      "id": "MEM-3",
+      "id": "CT-3",
       "priority": "HIGH",
-      "objective": "Creare candidate solo per un difetto riproducibile di memoria; evitare nuove feature non richieste.",
+      "objective": "Se esiste un FAIL riproducibile, preparare una sola candidate di correzione con rollback; altrimenti nessuna modifica.",
       "kind": "CODE_IF_EVIDENCE",
       "status": "PENDING"
     }
