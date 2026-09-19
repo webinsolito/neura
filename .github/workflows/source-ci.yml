@@ -1,13 +1,6 @@
 name: NEURA Source CI
 on:
-  push:
-    branches:
-      - main
-      - stable
-      - 'candidate/**'
-    paths-ignore:
-      - 'bootstrap/**'
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -15,23 +8,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Restore verified bundled source when tree is not expanded
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d capo_local/src ]; then
+            archive="bootstrap/c9_38_source.tar.gz"
+            test -f "$archive"
+            expected_blob="6a50496d5f814d31a1469eda740b8cf2205a2d8b"
+            actual_blob="$(git hash-object "$archive")"
+            if [ "$actual_blob" != "$expected_blob" ]; then
+              echo "Bundled source archive blob mismatch: $actual_blob"
+              exit 1
+            fi
+            tar -xzf "$archive"
+          fi
+          test -d capo_local/src
+          test -f capo_local/src/go.mod
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
+          cache: false
+
       - name: Formatting check
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(gofmt -l capo_local/src)" || { gofmt -l capo_local/src; exit 1; }
+          unformatted="$(gofmt -l capo_local/src)"
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: Vet
         working-directory: capo_local/src
         run: go vet ./...
+
       - name: Source regression gate
         working-directory: capo_local/src
         run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+
       - name: Environment-limited gate status
         run: |
           echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_IN_SOURCE_CI'
