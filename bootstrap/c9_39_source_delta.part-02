@@ -163,7 +163,6 @@ Discovered: false, Implemented: false, Usable: false, Priority: 50, Note: "watch
 -func (s *Server) callLocalModel(ctx context.Context, user string, backend BackendChatResponse, rawBackend []byte, runtimeState string, history []HistoryEntry, memoryBlock, skillBlock string) (string, error) {
 -	if s.modelFabric == nil {
 -		return "", errors.New("model fabric non inizializzato")
-+
 +func (m *ModelFabric) LiveStatus(ctx context.Context, client *http.Client, primaryEndpoint, primaryModel string) map[string]any {
 +	candidates := m.LiveCandidates(ctx, client, primaryEndpoint, primaryModel)
 +	selected := map[string]any{}
@@ -187,7 +186,6 @@ Discovered: false, Implemented: false, Usable: false, Priority: 50, Note: "watch
 -	case "llama.cpp":
 -		if s.modelFabric.breaker != nil && !s.modelFabric.breaker.Allow() {
 -			return "", errors.New("runtime locale temporaneamente isolato dal circuit breaker")
-+
 +}
 +
 +func taskForEvolutionRole(role string) ModelTask {
