@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "sha256": "d864ee14fed5b518c4bb3d733fdb08208526f140dcebe64c4b08fa3762e5e1e1",
+  "policy": "fail_closed",
+  "recurring_cost_eur": 0
+}
