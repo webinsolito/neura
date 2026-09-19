@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "product": "NEURA",
-  "version": "0.40.38-c9.38-external-warden-capability-leases",
+  "version": "0.40.39-c9.39-integrated-security-model-fabric",
   "candidate": true,
-  "parent_artifact": "NEURA_C9_37_CANDIDATE_COMPETITION_LEAN_DELIVERY.zip",
-  "parent_sha256": "4ba53ef50d3f4597f698da231b4f18a345733a7df73d28b48ebc2f7e2d409d51",
-  "policy": "external warden is required in shipped config; every privileged action first receives a bounded single-use short-TTL capability lease from a separate process with pinned fail-closed policy and an independent hash-chained audit ledger; internal Safety/Trust gates remain mandatory; stable remains protected"
+  "parent_artifact": "NEURA_C9_38_LOCAL_MODEL_FABRIC_2026_LEAN_DELIVERY.zip",
+  "parent_sha256": "9dd6ebf173c68a522a5279a87f372af36e8176ea315cbbe3213764fc436a119c",
+  "policy": "C9.39 integrates the verified External Warden capability-lease boundary from the sibling C9.38 candidate into the C9.38 Local Model Fabric baseline. Live local-AI authorization is bound to the exact frozen loopback endpoint selected by the deterministic model router; strict replay remains offline; stable is not modified."
 }
