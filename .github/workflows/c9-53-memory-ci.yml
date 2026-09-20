@@ -1,0 +1,66 @@
+name: NEURA C9.53 Memory Retrieval Fabric CI
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: neura-c9-53-memory-retrieval-fabric-ci
+  cancel-in-progress: true
+jobs:
+  memory-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore C9.52 source chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  bootstrap/c9_38_source.tar.gz" | sha256sum -c -
+          rm -rf capo_local/src
+          tar -xzf bootstrap/c9_38_source.tar.gz
+          cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply /tmp/c9_39.patch
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > /tmp/c9_51.patch
+          echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  /tmp/c9_51.patch" | sha256sum -c -
+          git apply /tmp/c9_51.patch
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > /tmp/c9_52.patch
+          echo "d6898f851664d90e02184bf005860b94ce3fb8d4d9d359593def1691c516409d  /tmp/c9_52.patch" | sha256sum -c -
+          git apply /tmp/c9_52.patch
+      - name: Apply C9.53 candidate overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Formatting gate
+        shell: bash
+        run: test -z "$(gofmt -l capo_local/src)"
+      - name: Vet
+        working-directory: capo_local/src
+        run: go vet ./...
+      - name: C9.53 focused tests
+        working-directory: capo_local/src
+        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery' .
+      - name: Full anti-regression
+        working-directory: capo_local/src
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+      - name: Focused race
+        working-directory: capo_local/src
+        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery' .
+      - name: Windows amd64 cross-build
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPO_LOCAL_C9_53.exe .
+          test -s /tmp/NEURA_CAPO_LOCAL_C9_53.exe
+      - name: Truthful environment status
+        run: |
+          echo 'BitNet real model/runtime benchmark=NOT_TESTED_BY_THIS_WORKFLOW'
+          echo 'Windows native execution=NOT_TESTED'
+          echo 'Stable promotion=NOT_PERFORMED'
