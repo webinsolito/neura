@@ -1,0 +1,24 @@
+NEURA C9.53 — MEMORY RETRIEVAL FABRIC
+STATE: CANDIDATE / NOT PROMOTED
+BASE: candidate/c9-52-recovery-release-integrity
+ROLLBACK: rollback/c9-53-pre-memory-retrieval
+STABLE: UNCHANGED
+
+IMPLEMENTED IN CANDIDATE:
+- Hybrid BM25 + semantic embedding + entity overlap + temporal decay rank fusion.
+- Deterministic ranking and tie-break.
+- Fail-soft behavior when embeddings are unavailable.
+- Local-only BitNet-compatible command embedding adapter; no download and no remote endpoint.
+- Focused anti-regression tests.
+- Manual workflow_dispatch verification gate only; no cron/schedule/push automation.
+
+TEST STATUS:
+- Code committed: YES.
+- GitHub C9.53 workflow executed: NOT YET VERIFIED.
+- Real BitNet model/runtime benchmark: NOT TESTED.
+- Windows amd64 cross-build for C9.53: NOT YET VERIFIED.
+- Windows native execution: NOT TESTED.
+- Stable promotion: NO.
+
+NEXT GATE:
+Run the manual C9.53 workflow. Only after real PASS may C9.54 capability/profile isolation be based on this candidate.
