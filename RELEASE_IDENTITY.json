@@ -1,9 +1,9 @@
 {
-  "schema": 1,
+  "schema": 2,
   "product": "NEURA",
-  "version": "0.40.39-c9.39-integrated-security-model-fabric",
+  "version": "0.40.52-c9.52-recovery-release-integrity",
   "candidate": true,
-  "parent_artifact": "NEURA_C9_38_LOCAL_MODEL_FABRIC_2026_LEAN_DELIVERY.zip",
-  "parent_sha256": "9dd6ebf173c68a522a5279a87f372af36e8176ea315cbbe3213764fc436a119c",
-  "policy": "C9.39 integrates the verified External Warden capability-lease boundary from the sibling C9.38 candidate into the C9.38 Local Model Fabric baseline. Live local-AI authorization is bound to the exact frozen loopback endpoint selected by the deterministic model router; strict replay remains offline; stable is not modified."
+  "parent_artifact": "bootstrap/c9_51_context_budget_core.patch.gz.b64",
+  "parent_sha256": "1167515a083854efbbdce9a1e9f22ea0f056bff7820907c22736805851f047ff",
+  "policy": "C9.52 anchors the real C9.51 context-budget source delta by local SHA-256, rejects parent path traversal and drift, rebuilds the static recovery bundle from the current candidate, and keeps main/stable untouched."
 }
