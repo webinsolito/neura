@@ -1,4 +1,4 @@
-name: NEURA C9.39 Source CI
+name: NEURA C9.51 Context Budget Core CI
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: neura-c9-39-source-ci
+  group: neura-c9-51-context-budget-core-ci
   cancel-in-progress: true
 
 jobs:
@@ -35,11 +35,27 @@ jobs:
         run: |
           set -euo pipefail
           patch=/tmp/c9_39_source_delta.patch
-          cat bootstrap/c9_39_source_delta.part-00               bootstrap/c9_39_source_delta.part-01               bootstrap/c9_39_source_delta.part-02               bootstrap/c9_39_source_delta.part-03               bootstrap/c9_39_source_delta.part-04 > "$patch"
+          cat bootstrap/c9_39_source_delta.part-00 bootstrap/c9_39_source_delta.part-01 bootstrap/c9_39_source_delta.part-02 bootstrap/c9_39_source_delta.part-03 bootstrap/c9_39_source_delta.part-04 > "$patch"
           echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  $patch" | sha256sum -c -
           git apply --check "$patch"
           git apply "$patch"
           grep -F '0.40.39-c9.39-integrated-security-model-fabric' capo_local/src/evolution.go
+
+      - name: Apply verified C9.51 context-budget delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          gz=/tmp/c9_51_context_budget_core.patch.gz
+          patch=/tmp/c9_51_context_budget_core.patch
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 > "$gz"
+          echo "d4b8a6f500489601daba0a4b696879a39e74449e0448d8b356e5dd18387285a2  $gz" | sha256sum -c -
+          gzip -dc "$gz" > "$patch"
+          echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  $patch" | sha256sum -c -
+          git apply --check "$patch"
+          git apply "$patch"
+          grep -F 'ContextWindowTokens' capo_local/src/main.go
+          test -f capo_local/src/context_budget.go
+          test -f capo_local/src/context_budget_integration_test.go
 
       - uses: actions/setup-go@v7
         with:
@@ -68,22 +84,51 @@ jobs:
         working-directory: capo_local/src
         run: go vet ./...
 
-      - name: C9.39 integration gate
+      - name: C9.51 context governor integration gate
+        working-directory: capo_local/src
+        env:
+          NEURA_WARDEN_BIN: /tmp/neura-warden
+        run: go test -count=1 -run 'TestContextBudget|TestCallLlama' .
+
+      - name: C9.39 security and model-fabric regression gate
         working-directory: capo_local/src
         env:
           NEURA_WARDEN_BIN: /tmp/neura-warden
         run: go test -count=1 -run 'TestC939|TestExternalWarden|TestModelFabric' .
 
-      - name: Source regression gate
+      - name: Full source anti-regression gate
         working-directory: capo_local/src
         env:
           NEURA_WARDEN_BIN: /tmp/neura-warden
         run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
 
+      - name: Race gate
+        working-directory: capo_local/src
+        env:
+          NEURA_WARDEN_BIN: /tmp/neura-warden
+        run: |
+          go test -race -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' .
+          go test -race -count=1 ./warden
+
+      - name: Context governor benchmark smoke
+        working-directory: capo_local/src
+        run: go test -run '^$' -bench 'BenchmarkBuildGovernedChatContext' -benchmem -benchtime=100x -count=1 .
+
+      - name: Windows amd64 cross-build
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPO_LOCAL_C9_51.exe .
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_WARDEN_C9_51.exe ./cmd/neura-warden
+          test -s /tmp/NEURA_CAPO_LOCAL_C9_51.exe
+          test -s /tmp/NEURA_WARDEN_C9_51.exe
+
       - name: Environment-limited gate status
         run: |
-          echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_IN_SOURCE_CI'
+          echo 'TestStaticRecoveryBundleMatchesCurrentRelease=NOT_VERIFIED_UNTIL_C9_51_RECOVERY_REBUILD'
           echo 'TestWindowsBootstrapC927Contract=NOT_VERIFIED_IN_SOURCE_CI'
           echo 'TestCleanWindowsReadinessHarnessExists=NOT_VERIFIED_IN_SOURCE_CI'
+          echo 'Windows amd64 cross-build=TESTED_BY_THIS_WORKFLOW'
           echo 'Windows native execution=NOT_TESTED'
           echo 'No skipped or environment-limited item is reinterpreted as PASS.'
