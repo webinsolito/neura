@@ -5,33 +5,31 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
-// MemoryDocument is the minimal local-first record used by the retrieval fabric.
-// Embedding is optional: lexical/entity/temporal retrieval remains available when
-// a local embedding runtime is absent or unhealthy.
 type MemoryDocument struct {
-	ID        string
-	Text      string
-	Entities  []string
+	ID string
+	Text string
+	Entities []string
 	Timestamp time.Time
 	Embedding []float32
 }
 
 type MemoryQuery struct {
-	Text      string
-	Entities  []string
-	Now       time.Time
+	Text string
+	Entities []string
+	Now time.Time
 	Embedding []float32
-	TopK      int
+	TopK int
 }
 
 type MemoryScore struct {
 	Document MemoryDocument
-	Score    float64
-	BM25     float64
+	Score float64
+	BM25 float64
 	Semantic float64
-	Entity   float64
+	Entity float64
 	Temporal float64
 }
 
@@ -43,9 +41,6 @@ func DefaultRetrievalWeights() RetrievalWeights {
 	return RetrievalWeights{BM25: 0.40, Semantic: 0.35, Entity: 0.15, Temporal: 0.10}
 }
 
-// RetrieveMemory fuses independent signals. It is deterministic and fail-soft:
-// missing or malformed embeddings simply contribute zero rather than making
-// memory unusable. Invalid retrieval weights are sanitized before ranking.
 func RetrieveMemory(docs []MemoryDocument, q MemoryQuery, w RetrievalWeights) []MemoryScore {
 	if q.TopK <= 0 {
 		q.TopK = 8
@@ -54,7 +49,7 @@ func RetrieveMemory(docs []MemoryDocument, q MemoryQuery, w RetrievalWeights) []
 		q.Now = time.Now().UTC()
 	}
 	w = sanitizeRetrievalWeights(w)
-	qterms := tokenizeMemory(q.Text)
+	qterms := uniqueTerms(tokenizeMemory(q.Text))
 	df := map[string]int{}
 	docTerms := make([][]string, len(docs))
 	totalLen := 0
@@ -114,8 +109,27 @@ func sanitizeRetrievalWeights(w RetrievalWeights) RetrievalWeights {
 
 func tokenizeMemory(s string) []string {
 	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r >= 'À' && r <= 'ÿ')
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
 	})
+}
+
+func uniqueTerms(in []string) []string {
+	if len(in) < 2 {
+		return in
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, t := range in {
+		if t == "" {
+			continue
+		}
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		out = append(out, t)
+	}
+	return out
 }
 
 func bm25Score(doc, query []string, df map[string]int, n int, avgdl float64) float64 {
@@ -200,8 +214,6 @@ func temporalMemory(now, ts time.Time) float64 {
 	if now.IsZero() || ts.IsZero() {
 		return 0
 	}
-	// A future-dated memory must not gain a freshness advantage. Treat it as
-	// temporally untrusted while allowing lexical/entity/semantic fallback.
 	if ts.After(now) {
 		return 0
 	}
