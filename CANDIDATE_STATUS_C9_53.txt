@@ -5,6 +5,7 @@ ROLLBACKS:
 - rollback/c9-53-pre-memory-retrieval
 - rollback/c9-53-pre-retrieval-hardening
 - rollback/c9-53-pre-query-input-hardening
+- rollback/c9-53-pre-embedding-process-hardening
 STABLE: UNCHANGED
 
 IMPLEMENTED IN CANDIDATE:
@@ -21,27 +22,36 @@ IMPLEMENTED IN CANDIDATE:
   - tokenizer is Unicode-aware for non-Latin text;
   - local embedding output is validated before query attachment;
   - oversized or non-finite provider embeddings fall back to lexical/entity/temporal retrieval.
+- Embedding subprocess hardening:
+  - request size capped at 256 KiB;
+  - stdout capped at 4 MiB;
+  - stderr capture capped at 16 KiB;
+  - configurable timeout capped at 60 seconds;
+  - canceled/expired parent contexts rejected before execution;
+  - process cancellation/timeout returns controlled fallback errors;
+  - WaitDelay bounds stuck pipe/process cleanup.
 - Focused anti-regression tests for original behavior and hardening cases.
 - Manual workflow_dispatch verification gate only; no cron/schedule/push automation.
+- Focused and race CI selectors now include embedding subprocess timeout/output-bound tests.
 
-LOCAL TEST EVIDENCE FOR CURRENT HARDENING:
-- gofmt: PASS.
-- go vet ./...: PASS.
-- go test -count=1 ./...: PASS.
-- go test -race -count=1 ./...: PASS.
+LOCAL TEST EVIDENCE:
+- Query/retrieval hardening isolated tests: PASS.
+- Embedding subprocess hardening gofmt: PASS.
+- Embedding subprocess hardening go vet ./...: PASS.
+- Embedding subprocess hardening go test -count=1 ./...: PASS.
+- Embedding subprocess hardening go test -race -count=1 ./...: PASS.
 
 TEST STATUS:
 - Code committed: YES.
-- Isolated C9.53 hardening tests: PASS.
-- GitHub C9.53 workflow executed for current candidate head: NOT YET VERIFIED (0 runs observed).
+- GitHub C9.53 workflow executed for current candidate head: NOT YET VERIFIED.
 - Full repository anti-regression in GitHub workflow: NOT YET VERIFIED.
 - Real BitNet model/runtime benchmark: NOT TESTED.
 - Windows amd64 cross-build for current C9.53 head: NOT YET VERIFIED.
 - Windows native execution: NOT TESTED.
 - Stable promotion: NO.
 
-SOURCE HEAD BEFORE THIS STATUS UPDATE:
-358dc0a9d858ea21db4608940855df774cc75b9e
+CURRENT SOURCE/CI HEAD BEFORE THIS STATUS UPDATE:
+0b80dca7c33ae93ae1659adb4cea2719172123cc
 
 NEXT GATE:
 Run the manual C9.53 workflow against the current candidate head. If it fails, fix the concrete failing gate and rerun. Only after real PASS may C9.54 be based on this candidate.
