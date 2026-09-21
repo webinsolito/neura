@@ -45,13 +45,13 @@ jobs:
         run: go vet ./...
       - name: C9.53 focused tests
         working-directory: capo_local/src
-        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery' .
+        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
       - name: Full anti-regression
         working-directory: capo_local/src
         run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
       - name: Focused race
         working-directory: capo_local/src
-        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery' .
+        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
       - name: Windows amd64 cross-build
         working-directory: capo_local/src
         shell: bash
