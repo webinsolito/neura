@@ -39,32 +39,44 @@ func TestMemoryRetrievalDeterministicTieBreak(t *testing.T) {
 
 func TestMemoryRetrievalRejectsFutureTimestampBoost(t *testing.T) {
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-	docs := []MemoryDocument{
-		{ID: "current", Text: "same", Timestamp: now.Add(-time.Hour)},
-		{ID: "future", Text: "same", Timestamp: now.Add(time.Hour)},
+	docs := []MemoryDocument{{ID: "current", Text: "same", Timestamp: now.Add(-time.Hour)}, {ID: "future", Text: "same", Timestamp: now.Add(time.Hour)}}
+	r := RetrieveMemory(docs, MemoryQuery{Text: "same", Now: now, TopK: 2}, RetrievalWeights{Temporal: 1})
+	if r[0].Document.ID != "current" || r[1].Temporal != 0 {
+		t.Fatalf("future boost not rejected: %#v", r)
 	}
-	weights := RetrievalWeights{Temporal: 1}
-	r := RetrieveMemory(docs, MemoryQuery{Text: "same", Now: now, TopK: 2}, weights)
-	if r[0].Document.ID != "current" {
-		t.Fatalf("future-dated memory gained freshness advantage: %#v", r)
+}
+
+func TestRepeatedQueryTermsDoNotInflateBM25(t *testing.T) {
+	now := time.Now().UTC()
+	docs := []MemoryDocument{{ID: "a", Text: "memory retrieval"}, {ID: "b", Text: "other"}}
+	one := RetrieveMemory(docs, MemoryQuery{Text: "memory", Now: now, TopK: 2}, RetrievalWeights{BM25: 1})
+	repeated := RetrieveMemory(docs, MemoryQuery{Text: "memory memory memory memory", Now: now, TopK: 2}, RetrievalWeights{BM25: 1})
+	if math.Abs(one[0].BM25-repeated[0].BM25) > 1e-12 {
+		t.Fatalf("query repetition inflated BM25: one=%v repeated=%v", one[0].BM25, repeated[0].BM25)
 	}
-	if r[1].Temporal != 0 {
-		t.Fatalf("expected future temporal score 0, got %v", r[1].Temporal)
+}
+
+func TestUnicodeTokenizationPreservesNonLatinTerms(t *testing.T) {
+	tokens := tokenizeMemory("NEURA 東京 память 123")
+	want := map[string]bool{"neura": true, "東京": true, "память": true, "123": true}
+	for _, token := range tokens {
+		delete(want, token)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing unicode tokens: %#v; got %#v", want, tokens)
 	}
 }
 
 func TestEntityOverlapNormalizesDuplicateAndBlankQueryEntities(t *testing.T) {
-	got := entityOverlap([]string{"NEURA", " neura ", ""}, []string{"neura"})
-	if got != 1 {
+	if got := entityOverlap([]string{"NEURA", " neura ", ""}, []string{"neura"}); got != 1 {
 		t.Fatalf("expected normalized full overlap, got %v", got)
 	}
 }
 
 func TestSanitizeRetrievalWeightsRejectsInvalidValues(t *testing.T) {
 	got := sanitizeRetrievalWeights(RetrievalWeights{BM25: math.NaN(), Semantic: -1, Entity: math.Inf(1)})
-	want := DefaultRetrievalWeights()
-	if got != want {
-		t.Fatalf("expected defaults for invalid zero-sum weights: got %#v want %#v", got, want)
+	if got != DefaultRetrievalWeights() {
+		t.Fatalf("unexpected sanitized weights: %#v", got)
 	}
 }
 
