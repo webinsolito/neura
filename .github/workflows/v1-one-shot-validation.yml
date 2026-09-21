@@ -1,0 +1,158 @@
+name: NEURA V1 RC One-Shot Validation
+on:
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: neura-v1-one-shot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  v1-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Formatting
+        shell: bash
+        run: test -z "$(gofmt -l v1_bridge)"
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+      - name: Unit integration security recovery
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+      - name: Race
+        working-directory: v1_bridge
+        run: go test -race -count=1 ./...
+      - name: Windows cross-build
+        working-directory: v1_bridge
+        shell: bash
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_V1_BRIDGE.exe .
+          test -s /tmp/NEURA_V1_BRIDGE.exe
+
+  v1-windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Native Windows tests
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          go test -count=1 ./...
+          go build -o "$env:RUNNER_TEMP\NEURA_V1_BRIDGE.exe" .
+      - name: Native bridge smoke and real Windows observe
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP "neura-data"
+          $workspace = Join-Path $env:RUNNER_TEMP "neura-workspace"
+          New-Item -ItemType Directory -Force -Path $data,$workspace | Out-Null
+          $exe = Join-Path $env:RUNNER_TEMP "NEURA_V1_BRIDGE.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList @("-data",$data,"-workspace",$workspace) -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for($i=0;$i -lt 20;$i++){
+              Start-Sleep -Milliseconds 300
+              try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/health"; $ok=$true; break } catch {}
+            }
+            if(-not $ok){ throw "bridge did not become healthy" }
+            if(-not $health.ok){ throw "health did not report ok" }
+            $status = Invoke-RestMethod -Uri "http://127.0.0.1:8765/status"
+            if($status.core -ne "online"){ throw "core not online" }
+            $body = @{goal="ricorda windows native memory"} | ConvertTo-Json
+            $mem = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $body -Uri "http://127.0.0.1:8765/command"
+            if($mem.status -ne "ok"){ throw "memory command failed" }
+            $body2 = @{goal="processi windows"} | ConvertTo-Json
+            $obs = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $body2 -Uri "http://127.0.0.1:8765/command"
+            if($obs.status -ne "ok"){ throw "Windows observe failed" }
+            if(-not $obs.results[0].verified){ throw "Windows observe not verified" }
+            $receipts = Invoke-RestMethod -Uri "http://127.0.0.1:8765/receipts?limit=10"
+            if($receipts.items.Count -lt 2){ throw "expected receipts missing" }
+          } finally {
+            if($p -and -not $p.HasExited){ Stop-Process -Id $p.Id -Force }
+          }
+
+  inherited-c9-53-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore C9.53 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  bootstrap/c9_38_source.tar.gz" | sha256sum -c -
+          rm -rf capo_local/src
+          tar -xzf bootstrap/c9_38_source.tar.gz
+          cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply /tmp/c9_39.patch
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > /tmp/c9_51.patch
+          echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  /tmp/c9_51.patch" | sha256sum -c -
+          git apply /tmp/c9_51.patch
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > /tmp/c9_52.patch
+          echo "d6898f851664d90e02184bf005860b94ce3fb8d4d9d359593def1691c516409d  /tmp/c9_52.patch" | sha256sum -c -
+          git apply /tmp/c9_52.patch
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Vet
+        working-directory: capo_local/src
+        run: go vet ./...
+      - name: Focused C9.53
+        working-directory: capo_local/src
+        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+      - name: Full anti-regression
+        working-directory: capo_local/src
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+      - name: Race
+        working-directory: capo_local/src
+        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+      - name: Windows cross-build
+        working-directory: capo_local/src
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPO_LOCAL_C9_53.exe .
+
+  inherited-c9-53-windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore C9.53 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf capo_local/src
+          tar -xzf bootstrap/c9_38_source.tar.gz
+          cat bootstrap/c9_39_source_delta.part-* > "$RUNNER_TEMP/c9_39.patch"
+          git apply "$RUNNER_TEMP/c9_39.patch"
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > "$RUNNER_TEMP/c9_51.patch"
+          git apply "$RUNNER_TEMP/c9_51.patch"
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > "$RUNNER_TEMP/c9_52.patch"
+          git apply "$RUNNER_TEMP/c9_52.patch"
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Native Windows focused tests and build
+        working-directory: capo_local/src
+        shell: pwsh
+        run: |
+          go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+          go build -o "$env:RUNNER_TEMP\NEURA_CAPO_LOCAL_C9_53.exe" .
+          if(-not (Test-Path "$env:RUNNER_TEMP\NEURA_CAPO_LOCAL_C9_53.exe")){ throw "native executable missing" }
