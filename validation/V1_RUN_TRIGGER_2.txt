@@ -1,0 +1,1 @@
+Second one-shot validation after bootstrap recovery and formatting gate fix.
