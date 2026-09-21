@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -78,4 +79,10 @@ func TestRelativeModelExecutableRejected(t *testing.T) {
 func TestLoopbackHTTPRejectsRemoteEndpoint(t *testing.T) {
 	if loopbackHTTP("https://example.com") || loopbackHTTP("http://192.168.1.4:11434") { t.Fatal("remote model endpoint accepted") }
 	if !loopbackHTTP("http://127.0.0.1:11434") { t.Fatal("loopback endpoint rejected") }
+}
+
+func TestWindowsProcessesFailsExplicitlyOffWindows(t *testing.T) {
+	if runtime.GOOS=="windows" { t.Skip("non-Windows negative test") }
+	c,_,_:=testCore(t);r:=c.Execute(context.Background(),"processi windows")
+	if r.Status!="unavailable" { t.Fatalf("%+v",r) }
 }
