@@ -51,3 +51,15 @@ func TestReceiptPersisted(t *testing.T) {
 	r := s.RecentReceipts(1)
 	if len(r) != 1 || r[0].Status != "verified" { t.Fatalf("%+v", r) }
 }
+
+func TestCorruptPrimaryRecoversFromBackup(t *testing.T) {
+	c, s, _ := testCore(t)
+	r := c.Execute(context.Background(), "ricorda recovery reale")
+	if r.Status != "ok" { t.Fatalf("%+v", r) }
+	primary := filepath.Join(s.dir, "memory.jsonl")
+	if _, err := os.Stat(primary+".bak"); err != nil { t.Fatalf("backup missing: %v", err) }
+	if err := os.WriteFile(primary, []byte("{corrupt}\\n"), 0o600); err != nil { t.Fatal(err) }
+	reloaded, err := NewStore(s.dir)
+	if err != nil { t.Fatalf("recovery failed: %v", err) }
+	if got := len(reloaded.SearchMemory("recovery", 10)); got != 1 { t.Fatalf("want recovered memory, got %d", got) }
+}
