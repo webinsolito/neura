@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,14 +126,20 @@ func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]strin
 
 type PlanStep struct{Tool string `json:"tool"`;Input map[string]string `json:"input"`}
 type Plan struct{Summary string `json:"summary"`;Steps []PlanStep `json:"steps"`}
-type ModelAdapter struct{Executable string;Args []string;Timeout time.Duration}
-func (m ModelAdapter)Available()bool{if m.Executable==""||!filepath.IsAbs(m.Executable){return false};st,err:=os.Stat(m.Executable);return err==nil&&!st.IsDir()}
+type ModelAdapter struct{Executable string;Args []string;Timeout time.Duration;OllamaURL string;OllamaModel string}
+func loopbackHTTP(raw string)bool{u,err:=url.Parse(raw);if err!=nil||u.Scheme!="http"{return false};host:=u.Hostname();ip:=net.ParseIP(host);return (host=="localhost"||(ip!=nil&&ip.IsLoopback()))&&u.Path==""}
+func (m ModelAdapter)Available()bool{if m.OllamaModel!=""&&loopbackHTTP(m.OllamaURL){return true};if m.Executable==""||!filepath.IsAbs(m.Executable){return false};st,err:=os.Stat(m.Executable);return err==nil&&!st.IsDir()}
+func validatePlan(p Plan,allowed []string)(Plan,error){if len(p.Steps)>8{return Plan{},errors.New("model plan exceeds 8 steps")};a:=map[string]bool{};for _,x:=range allowed{a[x]=true};for _,s:=range p.Steps{if !a[s.Tool]{return Plan{},fmt.Errorf("model requested disallowed tool %q",s.Tool)}};return p,nil}
+func (m ModelAdapter)planOllama(ctx context.Context,goal string,allowed []string)(Plan,error){
+	if m.OllamaModel==""||!loopbackHTTP(m.OllamaURL){return Plan{},errors.New("ollama not configured on loopback")}
+	prompt:=fmt.Sprintf("Return ONLY JSON with schema {\"summary\":string,\"steps\":[{\"tool\":string,\"input\":object}]}. Allowed tools: %s. Goal: %s",strings.Join(allowed,", "),goal)
+	body,_:=json.Marshal(map[string]any{"model":m.OllamaModel,"prompt":prompt,"stream":false,"format":"json"});req,err:=http.NewRequestWithContext(ctx,http.MethodPost,strings.TrimRight(m.OllamaURL,"/")+"/api/generate",strings.NewReader(string(body)));if err!=nil{return Plan{},err};req.Header.Set("Content-Type","application/json")
+	client:=&http.Client{Timeout:m.Timeout};resp,err:=client.Do(req);if err!=nil{return Plan{},err};defer resp.Body.Close();if resp.StatusCode!=200{return Plan{},fmt.Errorf("ollama http %d",resp.StatusCode)}
+	b,err:=io.ReadAll(io.LimitReader(resp.Body,1024*1024+1));if err!=nil{return Plan{},err};if len(b)>1024*1024{return Plan{},errors.New("ollama output too large")};var env struct{Response string `json:"response"`};if err:=json.Unmarshal(b,&env);err!=nil{return Plan{},err};var p Plan;if err:=json.Unmarshal([]byte(env.Response),&p);err!=nil{return Plan{},fmt.Errorf("invalid ollama plan json: %w",err)};return validatePlan(p,allowed)
+}
 func (m ModelAdapter)Plan(ctx context.Context,goal string,allowed []string)(Plan,error){
-	if !m.Available(){return Plan{},errors.New("local model not configured")};timeout:=m.Timeout;if timeout<=0||timeout>60*time.Second{timeout=20*time.Second};ctx,cancel:=context.WithTimeout(ctx,timeout);defer cancel()
-	req,_:=json.Marshal(map[string]any{"goal":goal,"allowed_tools":allowed,"format":"json_plan_v1"});cmd:=exec.CommandContext(ctx,m.Executable,m.Args...);cmd.Stdin=strings.NewReader(string(req));var out limitedBuffer;out.limit=1024*1024;cmd.Stdout=&out
-	if err:=cmd.Run();err!=nil{if ctx.Err()!=nil{return Plan{},fmt.Errorf("model timeout/cancel: %w",ctx.Err())};return Plan{},err};if out.exceeded{return Plan{},errors.New("model output too large")}
-	var p Plan;if err:=json.Unmarshal(out.b,&p);err!=nil{return Plan{},fmt.Errorf("invalid model json: %w",err)};if len(p.Steps)>8{return Plan{},errors.New("model plan exceeds 8 steps")}
-	allowedSet:=map[string]bool{};for _,x:=range allowed{allowedSet[x]=true};for _,s:=range p.Steps{if !allowedSet[s.Tool]{return Plan{},fmt.Errorf("model requested disallowed tool %q",s.Tool)}};return p,nil
+	if !m.Available(){return Plan{},errors.New("local model not configured")};timeout:=m.Timeout;if timeout<=0||timeout>60*time.Second{timeout=20*time.Second};ctx,cancel:=context.WithTimeout(ctx,timeout);defer cancel();if m.OllamaModel!=""{return m.planOllama(ctx,goal,allowed)}
+	req,_:=json.Marshal(map[string]any{"goal":goal,"allowed_tools":allowed,"format":"json_plan_v1"});cmd:=exec.CommandContext(ctx,m.Executable,m.Args...);cmd.Stdin=strings.NewReader(string(req));var out limitedBuffer;out.limit=1024*1024;cmd.Stdout=&out;if err:=cmd.Run();err!=nil{if ctx.Err()!=nil{return Plan{},fmt.Errorf("model timeout/cancel: %w",ctx.Err())};return Plan{},err};if out.exceeded{return Plan{},errors.New("model output too large")};var p Plan;if err:=json.Unmarshal(out.b,&p);err!=nil{return Plan{},fmt.Errorf("invalid model json: %w",err)};return validatePlan(p,allowed)
 }
 type limitedBuffer struct{b []byte;limit int;exceeded bool}
 func(l *limitedBuffer)Write(p []byte)(int,error){n:=len(p);remaining:=l.limit-len(l.b);if remaining<=0{l.exceeded=true;return n,nil};if n>remaining{l.b=append(l.b,p[:remaining]...);l.exceeded=true}else{l.b=append(l.b,p...)};return n,nil}
