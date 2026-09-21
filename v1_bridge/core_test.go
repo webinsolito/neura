@@ -74,3 +74,8 @@ func TestRelativeModelExecutableRejected(t *testing.T) {
 	m := ModelAdapter{Executable:"fake-model"}
 	if m.Available() { t.Fatal("relative model path must not be accepted") }
 }
+
+func TestLoopbackHTTPRejectsRemoteEndpoint(t *testing.T) {
+	if loopbackHTTP("https://example.com") || loopbackHTTP("http://192.168.1.4:11434") { t.Fatal("remote model endpoint accepted") }
+	if !loopbackHTTP("http://127.0.0.1:11434") { t.Fatal("loopback endpoint rejected") }
+}
