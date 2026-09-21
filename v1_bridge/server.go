@@ -37,9 +37,9 @@ func(s *Server)routes()http.Handler{mux:=http.NewServeMux()
 }
 func defaultDataDir()string{d,err:=os.UserConfigDir();if err!=nil{return filepath.Join(".",".neura")};return filepath.Join(d,"NEURA","v1")}
 func main(){
-	listen:=flag.String("listen","127.0.0.1:8765","loopback listen address");data:=flag.String("data",defaultDataDir(),"persistent data directory");workspace:=flag.String("workspace",".","allowed filesystem workspace");modelExec:=flag.String("model-exec","","optional absolute path to local model planner executable");flag.Parse()
+	listen:=flag.String("listen","127.0.0.1:8765","loopback listen address");data:=flag.String("data",defaultDataDir(),"persistent data directory");workspace:=flag.String("workspace",".","allowed filesystem workspace");modelExec:=flag.String("model-exec","","optional absolute path to local model planner executable");ollamaModel:=flag.String("ollama-model","","optional local Ollama model name");ollamaURL:=flag.String("ollama-url","http://127.0.0.1:11434","loopback Ollama URL");flag.Parse()
 	if !strings.HasPrefix(*listen,"127.0.0.1:")&&!strings.HasPrefix(*listen,"[::1]:"){log.Fatal("listen address must be loopback")}
-	store,err:=NewStore(*data);if err!=nil{log.Fatal(err)};tools,err:=NewToolRegistry(*workspace);if err!=nil{log.Fatal(err)};model:=ModelAdapter{Executable:*modelExec,Timeout:20*time.Second};core:=&Core{store:store,tools:tools,model:model};srv:=&Server{core:core,store:store,tools:tools,model:model,allowedOrigin:"https://webinsolito.github.io"}
+	store,err:=NewStore(*data);if err!=nil{log.Fatal(err)};tools,err:=NewToolRegistry(*workspace);if err!=nil{log.Fatal(err)};model:=ModelAdapter{Executable:*modelExec,Timeout:20*time.Second,OllamaURL:*ollamaURL,OllamaModel:*ollamaModel};core:=&Core{store:store,tools:tools,model:model};srv:=&Server{core:core,store:store,tools:tools,model:model,allowedOrigin:"https://webinsolito.github.io"}
 	httpSrv:=&http.Server{Addr:*listen,Handler:srv.routes(),ReadHeaderTimeout:5*time.Second,ReadTimeout:70*time.Second,WriteTimeout:70*time.Second,IdleTimeout:90*time.Second,MaxHeaderBytes:32*1024}
 	fmt.Printf("NEURA V1 bridge %s listening on http://%s\n",version,*listen);log.Fatal(httpSrv.ListenAndServe())
 }
