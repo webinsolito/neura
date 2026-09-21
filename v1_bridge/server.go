@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ func(s *Server)routes()http.Handler{mux:=http.NewServeMux()
 	mux.HandleFunc("POST /memory",func(w http.ResponseWriter,r *http.Request){var req struct{Text string `json:"text"`};if err:=decodeJSON(w,r,&req);err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return};m,created,err:=s.store.SaveMemory(req.Text);if err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return};writeJSON(w,200,map[string]any{"memory":m,"created":created})})
 	mux.HandleFunc("GET /receipts",func(w http.ResponseWriter,r *http.Request){n,_:=strconv.Atoi(r.URL.Query().Get("limit"));writeJSON(w,200,map[string]any{"items":s.store.RecentReceipts(n)})})
 	mux.HandleFunc("GET /tools",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"tools":s.tools.List(),"destructive_tools":[]string{}})})
-	mux.HandleFunc("GET /windows/status",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"available":false,"state":"not_implemented_in_rc1","pipeline":[]string{"observe","understand","preflight","action","verify"}})})
+	mux.HandleFunc("GET /windows/status",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"available":runtime.GOOS=="windows","observe":map[bool]string{true:"available",false:"not_on_windows"}[runtime.GOOS=="windows"],"understand":"deterministic_v1","preflight":"allowlist_and_timeout","action":"not_implemented_in_rc1","verify":"read_only_observation_verified","pipeline":[]string{"observe","understand","preflight","action","verify"}})})
 	return s.middleware(mux)
 }
 func defaultDataDir()string{d,err:=os.UserConfigDir();if err!=nil{return filepath.Join(".",".neura")};return filepath.Join(d,"NEURA","v1")}
