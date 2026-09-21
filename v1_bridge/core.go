@@ -109,6 +109,7 @@ type ToolRegistry struct{workspace string}
 type ToolResult struct{Tool string `json:"tool"`;Verified bool `json:"verified"`;Data any `json:"data,omitempty"`;Error string `json:"error,omitempty"`}
 func NewToolRegistry(root string)(*ToolRegistry,error){abs,err:=filepath.Abs(root);if err!=nil{return nil,err};real,err:=filepath.EvalSymlinks(abs);if err==nil{abs=real};return &ToolRegistry{workspace:abs},nil}
 func (r *ToolRegistry)resolve(user string)(string,error){if user==""{user="."};var p string;if filepath.IsAbs(user){p=filepath.Clean(user)}else{p=filepath.Join(r.workspace,user)};abs,err:=filepath.Abs(p);if err!=nil{return "",err};real,err:=filepath.EvalSymlinks(abs);if err==nil{abs=real};rel,err:=filepath.Rel(r.workspace,abs);if err!=nil{return "",err};if rel==".."||strings.HasPrefix(rel,".."+string(os.PathSeparator)){return "",errors.New("path escapes workspace")};return abs,nil}
+func sensitivePath(path string)bool{name:=strings.ToLower(filepath.Base(path));if name==".env"||name==".env.local"||name=="credentials"||name=="credentials.json"||name=="secrets.json"||name=="id_rsa"||name=="id_ed25519"{return true};ext:=strings.ToLower(filepath.Ext(name));return ext==".pem"||ext==".key"||ext==".p12"||ext==".pfx"}
 func (r *ToolRegistry)List()[]string{return []string{"system.info","fs.list","fs.read"}}
 func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]string)ToolResult{
 	switch name{
@@ -116,7 +117,7 @@ func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]strin
 	case "fs.list":
 		p,err:=r.resolve(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};ents,err:=os.ReadDir(p);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if len(ents)>200{ents=ents[:200]};out:=make([]map[string]any,0,len(ents));for _,e:=range ents{info,_:=e.Info();item:=map[string]any{"name":e.Name(),"dir":e.IsDir()};if info!=nil{item["size"]=info.Size()};out=append(out,item)};return ToolResult{Tool:name,Verified:true,Data:out}
 	case "fs.read":
-		p,err:=r.resolve(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};f,err:=os.Open(p);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};defer f.Close();b,err:=io.ReadAll(io.LimitReader(f,256*1024+1));if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if len(b)>256*1024{return ToolResult{Tool:name,Error:"file exceeds 256 KiB read limit"}};return ToolResult{Tool:name,Verified:true,Data:string(b)}
+		p,err:=r.resolve(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if sensitivePath(p){return ToolResult{Tool:name,Error:"sensitive file blocked by secret firewall"}};f,err:=os.Open(p);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};defer f.Close();b,err:=io.ReadAll(io.LimitReader(f,256*1024+1));if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if len(b)>256*1024{return ToolResult{Tool:name,Error:"file exceeds 256 KiB read limit"}};return ToolResult{Tool:name,Verified:true,Data:string(b)}
 	default:return ToolResult{Tool:name,Error:"tool not allowed"}
 	}
 }
@@ -124,7 +125,7 @@ func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]strin
 type PlanStep struct{Tool string `json:"tool"`;Input map[string]string `json:"input"`}
 type Plan struct{Summary string `json:"summary"`;Steps []PlanStep `json:"steps"`}
 type ModelAdapter struct{Executable string;Args []string;Timeout time.Duration}
-func (m ModelAdapter)Available()bool{if m.Executable==""{return false};st,err:=os.Stat(m.Executable);return err==nil&&!st.IsDir()}
+func (m ModelAdapter)Available()bool{if m.Executable==""||!filepath.IsAbs(m.Executable){return false};st,err:=os.Stat(m.Executable);return err==nil&&!st.IsDir()}
 func (m ModelAdapter)Plan(ctx context.Context,goal string,allowed []string)(Plan,error){
 	if !m.Available(){return Plan{},errors.New("local model not configured")};timeout:=m.Timeout;if timeout<=0||timeout>60*time.Second{timeout=20*time.Second};ctx,cancel:=context.WithTimeout(ctx,timeout);defer cancel()
 	req,_:=json.Marshal(map[string]any{"goal":goal,"allowed_tools":allowed,"format":"json_plan_v1"});cmd:=exec.CommandContext(ctx,m.Executable,m.Args...);cmd.Stdin=strings.NewReader(string(req));var out limitedBuffer;out.limit=1024*1024;cmd.Stdout=&out
