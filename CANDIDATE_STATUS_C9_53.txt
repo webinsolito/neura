@@ -1,7 +1,9 @@
 NEURA C9.53 — MEMORY RETRIEVAL FABRIC
 STATE: CANDIDATE / NOT PROMOTED
 BASE: candidate/c9-52-recovery-release-integrity
-ROLLBACK: rollback/c9-53-pre-memory-retrieval
+ROLLBACKS:
+- rollback/c9-53-pre-memory-retrieval
+- rollback/c9-53-pre-retrieval-hardening
 STABLE: UNCHANGED
 
 IMPLEMENTED IN CANDIDATE:
@@ -9,16 +11,26 @@ IMPLEMENTED IN CANDIDATE:
 - Deterministic ranking and tie-break.
 - Fail-soft behavior when embeddings are unavailable.
 - Local-only BitNet-compatible command embedding adapter; no download and no remote endpoint.
-- Focused anti-regression tests.
+- Retrieval hardening:
+  - future-dated memories receive no temporal freshness boost;
+  - duplicate/blank entities are normalized before overlap scoring;
+  - invalid/negative/non-finite retrieval weights are sanitized and normalized;
+  - non-finite embedding values fail-soft to semantic score 0.
+- Focused anti-regression tests for the original behavior and the hardening cases.
 - Manual workflow_dispatch verification gate only; no cron/schedule/push automation.
 
 TEST STATUS:
 - Code committed: YES.
-- GitHub C9.53 workflow executed: NOT YET VERIFIED.
+- Isolated C9.53 overlay test run in current execution: PASS.
+- GitHub C9.53 workflow executed for current candidate head: NOT YET VERIFIED (0 runs observed).
+- Full repository anti-regression in GitHub workflow: NOT YET VERIFIED.
 - Real BitNet model/runtime benchmark: NOT TESTED.
-- Windows amd64 cross-build for C9.53: NOT YET VERIFIED.
+- Windows amd64 cross-build for current C9.53 head: NOT YET VERIFIED.
 - Windows native execution: NOT TESTED.
 - Stable promotion: NO.
 
+CURRENT CANDIDATE HEAD:
+ce4ac1724c5b2d511b0371810c4bb7fd7efe3961
+
 NEXT GATE:
-Run the manual C9.53 workflow. Only after real PASS may C9.54 capability/profile isolation be based on this candidate.
+Run the manual C9.53 workflow against the current candidate head. If it fails, fix the concrete failing gate and rerun. Only after real PASS may C9.54 be based on this candidate.
