@@ -102,10 +102,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/c9_38_src.b64.part-* | tr -d '\r\n' | base64 -d > /tmp/c9_38_source.tar.xz
-          xz -t /tmp/c9_38_source.tar.xz
+          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 -d > /tmp/verified_core.tar.xz
+          xz -t /tmp/verified_core.tar.xz
           rm -rf capo_local/src
-          xz -dc /tmp/c9_38_source.tar.xz | tar -xf -
+          xz -dc /tmp/verified_core.tar.xz | tar -xf -
           test -f capo_local/src/go.mod
           cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
           echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
@@ -148,10 +148,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/c9_38_src.b64.part-* | tr -d '\r\n' | base64 -d > "$RUNNER_TEMP/c9_38_source.tar.xz"
-          xz -t "$RUNNER_TEMP/c9_38_source.tar.xz"
+          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 -d > "$RUNNER_TEMP/verified_core.tar.xz"
+          xz -t "$RUNNER_TEMP/verified_core.tar.xz"
           rm -rf capo_local/src
-          xz -dc "$RUNNER_TEMP/c9_38_source.tar.xz" | tar -xf -
+          xz -dc "$RUNNER_TEMP/verified_core.tar.xz" | tar -xf -
           test -f capo_local/src/go.mod
           cat bootstrap/c9_39_source_delta.part-* > "$RUNNER_TEMP/c9_39.patch"
           git apply "$RUNNER_TEMP/c9_39.patch"
