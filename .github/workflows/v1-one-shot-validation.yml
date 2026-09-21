@@ -2,7 +2,7 @@ name: NEURA V1 RC One-Shot Validation
 on:
   pull_request:
     branches:
-      - validation/v1-rc-one-shot
+      - main
 permissions:
   contents: read
 concurrency:
