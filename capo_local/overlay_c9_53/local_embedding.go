@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os/exec"
 	"time"
@@ -16,11 +17,48 @@ type LocalEmbeddingProvider interface {
 
 type BitNetCommandEmbeddingProvider struct {
 	Executable string
-	Args []string
-	Timeout time.Duration
+	Args       []string
+	Timeout    time.Duration
 }
 
-const maxLocalEmbeddingDimensions = 65536
+const (
+	maxLocalEmbeddingDimensions   = 65536
+	maxLocalEmbeddingRequestBytes = 256 * 1024
+	maxLocalEmbeddingOutputBytes  = 4 * 1024 * 1024
+	maxLocalEmbeddingStderrBytes  = 16 * 1024
+	maxLocalEmbeddingTimeout      = 60 * time.Second
+)
+
+type cappedBuffer struct {
+	buf      bytes.Buffer
+	max      int
+	exceeded bool
+}
+
+func (w *cappedBuffer) Write(p []byte) (int, error) {
+	if w.max <= 0 {
+		w.exceeded = len(p) > 0
+		return len(p), nil
+	}
+	remaining := w.max - w.buf.Len()
+	if remaining <= 0 {
+		if len(p) > 0 {
+			w.exceeded = true
+		}
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		_, _ = w.buf.Write(p[:remaining])
+		w.exceeded = true
+		return len(p), nil
+	}
+	_, _ = w.buf.Write(p)
+	return len(p), nil
+}
+
+func (w *cappedBuffer) Bytes() []byte {
+	return w.buf.Bytes()
+}
 
 func validateLocalEmbedding(e []float32) bool {
 	if len(e) == 0 || len(e) > maxLocalEmbeddingDimensions {
@@ -35,26 +73,58 @@ func validateLocalEmbedding(e []float32) bool {
 	return true
 }
 
+func effectiveEmbeddingTimeout(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return 8 * time.Second
+	}
+	if timeout > maxLocalEmbeddingTimeout {
+		return maxLocalEmbeddingTimeout
+	}
+	return timeout
+}
+
 func (p BitNetCommandEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	if p.Executable == "" {
 		return nil, errors.New("bitnet embedding executable not configured")
 	}
-	timeout := p.Timeout
-	if timeout <= 0 {
-		timeout = 8 * time.Second
+	if len([]byte(text)) > maxLocalEmbeddingRequestBytes {
+		return nil, errors.New("local embedding request too large")
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("local embedding context unavailable: %w", err)
+	}
+
+	timeout := effectiveEmbeddingTimeout(p.Timeout)
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	in, _ := json.Marshal(map[string]string{"text": text})
-	cmd := exec.CommandContext(ctx, p.Executable, p.Args...)
-	cmd.Stdin = bytes.NewReader(in)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+
+	in, err := json.Marshal(map[string]string{"text": text})
+	if err != nil {
 		return nil, err
 	}
+
+	cmd := exec.CommandContext(runCtx, p.Executable, p.Args...)
+	cmd.WaitDelay = time.Second
+	cmd.Stdin = bytes.NewReader(in)
+
+	stdout := &cappedBuffer{max: maxLocalEmbeddingOutputBytes}
+	stderr := &cappedBuffer{max: maxLocalEmbeddingStderrBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	err = cmd.Run()
+	if runCtx.Err() != nil {
+		return nil, fmt.Errorf("local embedding execution canceled or timed out: %w", runCtx.Err())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("local embedding process failed: %w", err)
+	}
+	if stdout.exceeded {
+		return nil, errors.New("local embedding output too large")
+	}
+
 	var resp map[string][]float32
-	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
 		return nil, err
 	}
 	e := resp["embedding"]
