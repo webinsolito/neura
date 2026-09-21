@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func testServer(t *testing.T) *Server {
@@ -49,4 +51,15 @@ func TestStoreCorruptionFailsClosed(t *testing.T) {
 	dir := t.TempDir(); _ = os.MkdirAll(filepath.Join(dir, "data"), 0o700)
 	_ = os.WriteFile(filepath.Join(dir, "data", "memory.jsonl"), []byte("{bad}\n"), 0o600)
 	if _, err := NewStore(filepath.Join(dir, "data")); err == nil { t.Fatal("expected corruption error") }
+}
+
+func TestOllamaPlannerStrictAllowedTools(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){ _ = json.NewEncoder(w).Encode(map[string]string{"response": `{"summary":"ok","steps":[{"tool":"system.info","input":{}}]}`}) })); defer ts.Close()
+	m := ModelAdapter{OllamaURL:ts.URL,OllamaModel:"test",Timeout:time.Second}
+	p,err:=m.Plan(context.Background(),"status",[]string{"system.info"}); if err!=nil { t.Fatal(err) }; if len(p.Steps)!=1 || p.Steps[0].Tool!="system.info" { t.Fatalf("%+v",p) }
+}
+func TestOllamaPlannerRejectsDisallowedTool(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){ _ = json.NewEncoder(w).Encode(map[string]string{"response": `{"summary":"bad","steps":[{"tool":"shell.exec","input":{}}]}`}) })); defer ts.Close()
+	m := ModelAdapter{OllamaURL:ts.URL,OllamaModel:"test",Timeout:time.Second}
+	if _,err:=m.Plan(context.Background(),"bad",[]string{"system.info"}); err==nil { t.Fatal("disallowed tool accepted") }
 }
