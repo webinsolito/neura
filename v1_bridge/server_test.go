@@ -63,3 +63,11 @@ func TestOllamaPlannerRejectsDisallowedTool(t *testing.T) {
 	m := ModelAdapter{OllamaURL:ts.URL,OllamaModel:"test",Timeout:time.Second}
 	if _,err:=m.Plan(context.Background(),"bad",[]string{"system.info"}); err==nil { t.Fatal("disallowed tool accepted") }
 }
+
+func TestTrailingInvalidJSONRejected(t *testing.T) {
+	s:=testServer(t)
+	req:=httptest.NewRequest("POST","http://127.0.0.1/command",bytes.NewBufferString(`{"goal":"stato"} garbage`))
+	req.RemoteAddr="127.0.0.1:12345"
+	rr:=httptest.NewRecorder();s.routes().ServeHTTP(rr,req)
+	if rr.Code!=http.StatusBadRequest { t.Fatalf("code=%d body=%s",rr.Code,rr.Body.String()) }
+}
