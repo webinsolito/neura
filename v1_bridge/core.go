@@ -49,6 +49,8 @@ func NewStore(dir string)(*Store,error){
 	abs,err:=filepath.Abs(dir);if err!=nil{return nil,err}
 	if err:=os.MkdirAll(abs,0o700);err!=nil{return nil,err}
 	s:=&Store{dir:abs}
+	if _,err:=recoverJSONL(filepath.Join(abs,"memory.jsonl"));err!=nil{return nil,err}
+	if _,err:=recoverJSONL(filepath.Join(abs,"receipts.jsonl"));err!=nil{return nil,err}
 	if err:=s.loadJSONL(filepath.Join(abs,"memory.jsonl"),func(b []byte)error{var m Memory;if err:=json.Unmarshal(b,&m);err!=nil{return err};s.memories=append(s.memories,m);return nil});err!=nil{return nil,err}
 	if err:=s.loadJSONL(filepath.Join(abs,"receipts.jsonl"),func(b []byte)error{var r Receipt;if err:=json.Unmarshal(b,&r);err!=nil{return err};s.receipts=append(s.receipts,r);return nil});err!=nil{return nil,err}
 	return s,nil
@@ -59,10 +61,25 @@ func (s *Store)loadJSONL(path string,fn func([]byte)error)error{
 	for sc.Scan(){line++;b:=append([]byte(nil),sc.Bytes()...);if len(strings.TrimSpace(string(b)))==0{continue};if err:=fn(b);err!=nil{return fmt.Errorf("corrupt %s line %d: %w",filepath.Base(path),line,err)}}
 	return sc.Err()
 }
+func validateJSONL(path string) error {
+	f, err := os.Open(path); if errors.Is(err, os.ErrNotExist) { return nil }; if err != nil { return err }; defer f.Close()
+	sc := bufio.NewScanner(f); sc.Buffer(make([]byte, 0, 64*1024), 1024*1024); line := 0
+	for sc.Scan() { line++; b := strings.TrimSpace(sc.Text()); if b == "" { continue }; var raw json.RawMessage; if err := json.Unmarshal([]byte(b), &raw); err != nil { return fmt.Errorf("invalid jsonl line %d: %w", line, err) } }
+	return sc.Err()
+}
+func copyFileAtomic(src, dst string) error {
+	in, err := os.Open(src); if err != nil { return err }; defer in.Close(); tmp := dst+".tmp"
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); if err != nil { return err }; ok:=false
+	defer func(){ _=out.Close(); if !ok { _=os.Remove(tmp) } }()
+	if _,err=io.Copy(out,in);err!=nil{return err};if err=out.Sync();err!=nil{return err};if err=out.Close();err!=nil{return err};if err=os.Rename(tmp,dst);err!=nil{return err};ok=true;return nil
+}
+func recoverJSONL(path string)(bool,error){if err:=validateJSONL(path);err==nil{return false,nil};bak:=path+".bak";if err:=validateJSONL(bak);err!=nil{return false,fmt.Errorf("primary corrupt and backup invalid: %w",err)};if _,err:=os.Stat(bak);err!=nil{return false,fmt.Errorf("primary corrupt and backup unavailable: %w",err)};if err:=copyFileAtomic(bak,path);err!=nil{return false,err};return true,nil}
+func backupJSONL(path string)error{if err:=validateJSONL(path);err!=nil{return err};return copyFileAtomic(path,path+".bak")}
+
 func appendJSONL(path string,v any)error{
 	b,err:=json.Marshal(v);if err!=nil{return err}
 	f,err:=os.OpenFile(path,os.O_CREATE|os.O_WRONLY|os.O_APPEND,0o600);if err!=nil{return err};defer f.Close()
-	if _,err=f.Write(append(b,'\n'));err!=nil{return err};return f.Sync()
+	if _,err=f.Write(append(b,'\n'));err!=nil{return err};if err:=f.Sync();err!=nil{return err};return backupJSONL(path)
 }
 func normalizeText(s string)string{return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s)))," ")}
 func idFor(s string)string{h:=sha256.Sum256([]byte(normalizeText(s)));return hex.EncodeToString(h[:12])}
