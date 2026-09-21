@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +18,7 @@ import (
 
 type Server struct{core *Core;store *Store;tools *ToolRegistry;model ModelAdapter;allowedOrigin string}
 func writeJSON(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);_=json.NewEncoder(w).Encode(v)}
-func decodeJSON(w http.ResponseWriter,r *http.Request,dst any)error{r.Body=http.MaxBytesReader(w,r.Body,64*1024);dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields();if err:=dec.Decode(dst);err!=nil{return err};var extra any;if err:=dec.Decode(&extra);!errors.Is(err,os.ErrClosed)&&err==nil{return errors.New("multiple json values")};return nil}
+func decodeJSON(w http.ResponseWriter,r *http.Request,dst any)error{r.Body=http.MaxBytesReader(w,r.Body,64*1024);dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields();if err:=dec.Decode(dst);err!=nil{return err};var extra any;err:=dec.Decode(&extra);if errors.Is(err,io.EOF){return nil};if err==nil{return errors.New("multiple json values")};return fmt.Errorf("trailing json rejected: %w",err)}
 func(s *Server)middleware(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
 	if !loopbackRemote(r.RemoteAddr){writeJSON(w,http.StatusForbidden,map[string]string{"error":"loopback only"});return}
 	origin:=r.Header.Get("Origin");if origin!=""{if origin!=s.allowedOrigin&&origin!="http://localhost:8000"&&origin!="http://127.0.0.1:8000"{writeJSON(w,http.StatusForbidden,map[string]string{"error":"origin denied"});return};w.Header().Set("Access-Control-Allow-Origin",origin);w.Header().Set("Vary","Origin");w.Header().Set("Access-Control-Allow-Private-Network","true")}
