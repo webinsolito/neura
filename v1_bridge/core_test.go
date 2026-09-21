@@ -63,3 +63,14 @@ func TestCorruptPrimaryRecoversFromBackup(t *testing.T) {
 	if err != nil { t.Fatalf("recovery failed: %v", err) }
 	if got := len(reloaded.SearchMemory("recovery", 10)); got != 1 { t.Fatalf("want recovered memory, got %d", got) }
 }
+
+func TestSecretFirewallBlocksSensitiveFiles(t *testing.T) {
+	c, _, tools := testCore(t)
+	if err := os.WriteFile(filepath.Join(tools.workspace, ".env"), []byte("TOKEN=secret"), 0o600); err != nil { t.Fatal(err) }
+	r := c.Execute(context.Background(), "leggi file .env")
+	if r.Status != "blocked" || len(r.Results)==0 || r.Results[0].Error != "sensitive file blocked by secret firewall" { t.Fatalf("%+v", r) }
+}
+func TestRelativeModelExecutableRejected(t *testing.T) {
+	m := ModelAdapter{Executable:"fake-model"}
+	if m.Available() { t.Fatal("relative model path must not be accepted") }
+}
