@@ -4,6 +4,7 @@ BASE: candidate/c9-52-recovery-release-integrity
 ROLLBACKS:
 - rollback/c9-53-pre-memory-retrieval
 - rollback/c9-53-pre-retrieval-hardening
+- rollback/c9-53-pre-query-input-hardening
 STABLE: UNCHANGED
 
 IMPLEMENTED IN CANDIDATE:
@@ -15,13 +16,23 @@ IMPLEMENTED IN CANDIDATE:
   - future-dated memories receive no temporal freshness boost;
   - duplicate/blank entities are normalized before overlap scoring;
   - invalid/negative/non-finite retrieval weights are sanitized and normalized;
-  - non-finite embedding values fail-soft to semantic score 0.
-- Focused anti-regression tests for the original behavior and the hardening cases.
+  - non-finite embedding values fail-soft to semantic score 0;
+  - repeated query terms are de-duplicated so prompt repetition cannot inflate BM25;
+  - tokenizer is Unicode-aware for non-Latin text;
+  - local embedding output is validated before query attachment;
+  - oversized or non-finite provider embeddings fall back to lexical/entity/temporal retrieval.
+- Focused anti-regression tests for original behavior and hardening cases.
 - Manual workflow_dispatch verification gate only; no cron/schedule/push automation.
+
+LOCAL TEST EVIDENCE FOR CURRENT HARDENING:
+- gofmt: PASS.
+- go vet ./...: PASS.
+- go test -count=1 ./...: PASS.
+- go test -race -count=1 ./...: PASS.
 
 TEST STATUS:
 - Code committed: YES.
-- Isolated C9.53 overlay test run in current execution: PASS.
+- Isolated C9.53 hardening tests: PASS.
 - GitHub C9.53 workflow executed for current candidate head: NOT YET VERIFIED (0 runs observed).
 - Full repository anti-regression in GitHub workflow: NOT YET VERIFIED.
 - Real BitNet model/runtime benchmark: NOT TESTED.
@@ -29,8 +40,8 @@ TEST STATUS:
 - Windows native execution: NOT TESTED.
 - Stable promotion: NO.
 
-CURRENT CANDIDATE HEAD:
-ce4ac1724c5b2d511b0371810c4bb7fd7efe3961
+SOURCE HEAD BEFORE THIS STATUS UPDATE:
+358dc0a9d858ea21db4608940855df774cc75b9e
 
 NEXT GATE:
 Run the manual C9.53 workflow against the current candidate head. If it fails, fix the concrete failing gate and rerun. Only after real PASS may C9.54 be based on this candidate.
