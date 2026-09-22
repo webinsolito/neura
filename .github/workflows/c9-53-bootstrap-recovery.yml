@@ -127,7 +127,18 @@ jobs:
                   raise ValueError(f"core prefix not quartet aligned: {len(core_b64)}")
               core_raw = base64.b64decode(core_b64, validate=True)
               cd = lzma.LZMADecompressor(format=lzma.FORMAT_AUTO)
-              core_tar = cd.decompress(core_raw)
+              chunks = []
+              pos = 0
+              step = 256
+              while pos < len(core_raw):
+                  chunk = core_raw[pos:pos+step]
+                  try:
+                      chunks.append(cd.decompress(chunk))
+                      pos += len(chunk)
+                  except Exception as e:
+                      core_error = f"{type(e).__name__}:{e}:compressed_offset={pos}"
+                      break
+              core_tar = b"".join(chunks)
               core_eof = cd.eof
               core_complete, core_errors = extract_complete_tar_members(core_tar, work / "core", "core-prefix")
           except Exception as e:
