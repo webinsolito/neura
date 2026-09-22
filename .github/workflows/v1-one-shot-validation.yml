@@ -98,23 +98,31 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: candidate/v1-integration-rc1
-      - name: Restore C9.53 source
+      - name: Restore C9.53 source from verified baseline chain
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 --ignore-garbage -d > /tmp/verified_core.tar.xz
-          xz -t /tmp/verified_core.tar.xz
+          archive="bootstrap/c9_38_source.tar.gz"
+          test -f "$archive"
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
           rm -rf capo_local/src
-          xz -dc /tmp/verified_core.tar.xz | tar -xf -
+          tar -xzf "$archive"
           test -f capo_local/src/go.mod
           cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
           echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply --check /tmp/c9_39.patch
           git apply /tmp/c9_39.patch
-          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > /tmp/c9_51.patch
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 > /tmp/c9_51.patch.gz
+          echo "d4b8a6f500489601daba0a4b696879a39e74449e0448d8b356e5dd18387285a2  /tmp/c9_51.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/c9_51.patch.gz > /tmp/c9_51.patch
           echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  /tmp/c9_51.patch" | sha256sum -c -
+          git apply --check /tmp/c9_51.patch
           git apply /tmp/c9_51.patch
-          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > /tmp/c9_52.patch
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 > /tmp/c9_52.patch.gz
+          echo "08e1e1a4fee85d381d9fd26811e5dc7cf83f36e064c44a40d8cb2dad0d6d8ac0  /tmp/c9_52.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/c9_52.patch.gz > /tmp/c9_52.patch
           echo "d6898f851664d90e02184bf005860b94ce3fb8d4d9d359593def1691c516409d  /tmp/c9_52.patch" | sha256sum -c -
+          git apply --check /tmp/c9_52.patch
           git apply /tmp/c9_52.patch
           cp capo_local/overlay_c9_53/*.go capo_local/src/
       - uses: actions/setup-go@v7
@@ -144,20 +152,31 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: candidate/v1-integration-rc1
-      - name: Restore C9.53 source
+      - name: Restore C9.53 source from verified baseline chain
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 --ignore-garbage -d > "$RUNNER_TEMP/verified_core.tar.xz"
-          xz -t "$RUNNER_TEMP/verified_core.tar.xz"
+          archive="bootstrap/c9_38_source.tar.gz"
+          test -f "$archive"
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
           rm -rf capo_local/src
-          xz -dc "$RUNNER_TEMP/verified_core.tar.xz" | tar -xf -
+          tar -xzf "$archive"
           test -f capo_local/src/go.mod
           cat bootstrap/c9_39_source_delta.part-* > "$RUNNER_TEMP/c9_39.patch"
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  $RUNNER_TEMP/c9_39.patch" | sha256sum -c -
+          git apply --check "$RUNNER_TEMP/c9_39.patch"
           git apply "$RUNNER_TEMP/c9_39.patch"
-          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > "$RUNNER_TEMP/c9_51.patch"
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 > "$RUNNER_TEMP/c9_51.patch.gz"
+          echo "d4b8a6f500489601daba0a4b696879a39e74449e0448d8b356e5dd18387285a2  $RUNNER_TEMP/c9_51.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/c9_51.patch.gz" > "$RUNNER_TEMP/c9_51.patch"
+          echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  $RUNNER_TEMP/c9_51.patch" | sha256sum -c -
+          git apply --check "$RUNNER_TEMP/c9_51.patch"
           git apply "$RUNNER_TEMP/c9_51.patch"
-          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > "$RUNNER_TEMP/c9_52.patch"
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 > "$RUNNER_TEMP/c9_52.patch.gz"
+          echo "08e1e1a4fee85d381d9fd26811e5dc7cf83f36e064c44a40d8cb2dad0d6d8ac0  $RUNNER_TEMP/c9_52.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/c9_52.patch.gz" > "$RUNNER_TEMP/c9_52.patch"
+          echo "d6898f851664d90e02184bf005860b94ce3fb8d4d9d359593def1691c516409d  $RUNNER_TEMP/c9_52.patch" | sha256sum -c -
+          git apply --check "$RUNNER_TEMP/c9_52.patch"
           git apply "$RUNNER_TEMP/c9_52.patch"
           cp capo_local/overlay_c9_53/*.go capo_local/src/
       - uses: actions/setup-go@v7
