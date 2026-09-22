@@ -127,6 +127,17 @@ jobs:
           set -euo pipefail
           grep -R -n -E -C 3 'RuntimeProbeResult|LocalRuntimeSupervisor|runtimeSupervisor|NewLocalRuntimeSupervisor|\.Probe\(' capo_local/src || true
 
+      - name: Inspect recovered contracts for deterministic reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- runtime supervisor tests ---'
+          nl -ba capo_local/src/runtime_supervisor_test.go
+          echo '--- router request contracts ---'
+          nl -ba capo_local/src/router.go | sed -n '1,180p'
+          echo '--- evolution roadmap consumers ---'
+          grep -R -n -E -C 4 'EvolutionRoadmapItem|EvolutionPlan' capo_local/src || true
+
       - name: Validate salvaged C9.38 baseline
         shell: bash
         run: |
