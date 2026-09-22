@@ -1,0 +1,88 @@
+name: C9.53 Padded Core Validation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: c9-53-padded-core-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  c9-53-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: {ref: candidate/v1-integration-rc1}
+      - name: Restore padded verified core
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,pathlib
+          parts=sorted(pathlib.Path('bootstrap').glob('core.b64.part-*')); assert parts
+          clean=b''.join(b''.join(p.read_bytes() for p in parts).split()); clean+=b'='*(-len(clean)%4)
+          pathlib.Path('/tmp/core.tar.xz').write_bytes(base64.b64decode(clean,validate=True))
+          print('parts',len(parts),'chars',len(clean))
+          PY
+          xz -t /tmp/core.tar.xz
+          rm -rf capo_local/src; xz -dc /tmp/core.tar.xz | tar -xf -; test -f capo_local/src/go.mod
+          cat bootstrap/c9_39_source_delta.part-* >/tmp/c9_39.patch
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply --check /tmp/c9_39.patch; git apply /tmp/c9_39.patch
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 >/tmp/c9_51.gz
+          echo "d4b8a6f500489601daba0a4b696879a39e74449e0448d8b356e5dd18387285a2  /tmp/c9_51.gz" | sha256sum -c -
+          gzip -dc /tmp/c9_51.gz >/tmp/c9_51.patch; git apply --check /tmp/c9_51.patch; git apply /tmp/c9_51.patch
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 >/tmp/c9_52.gz
+          echo "08e1e1a4fee85d381d9fd26811e5dc7cf83f36e064c44a40d8cb2dad0d6d8ac0  /tmp/c9_52.gz" | sha256sum -c -
+          gzip -dc /tmp/c9_52.gz >/tmp/c9_52.patch; git apply --check /tmp/c9_52.patch; git apply /tmp/c9_52.patch
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+      - uses: actions/setup-go@v7
+        with: {go-version: '1.23.x', cache: false}
+      - name: Vet
+        working-directory: capo_local/src
+        run: go vet ./...
+      - name: Focused C9.53
+        working-directory: capo_local/src
+        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+      - name: Full anti-regression
+        working-directory: capo_local/src
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+      - name: Race
+        working-directory: capo_local/src
+        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+      - name: Windows cross-build
+        working-directory: capo_local/src
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPO_LOCAL_C9_53.exe .
+  c9-53-windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: {ref: candidate/v1-integration-rc1}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.x'}
+      - name: Restore padded verified core
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,pathlib,os
+          parts=sorted(pathlib.Path('bootstrap').glob('core.b64.part-*')); assert parts
+          clean=b''.join(b''.join(p.read_bytes() for p in parts).split()); clean+=b'='*(-len(clean)%4)
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'core.tar.xz').write_bytes(base64.b64decode(clean,validate=True))
+          PY
+          xz -t "$RUNNER_TEMP/core.tar.xz"; rm -rf capo_local/src; xz -dc "$RUNNER_TEMP/core.tar.xz" | tar -xf -
+          cat bootstrap/c9_39_source_delta.part-* >"$RUNNER_TEMP/c9_39.patch"; git apply --check "$RUNNER_TEMP/c9_39.patch"; git apply "$RUNNER_TEMP/c9_39.patch"
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc >"$RUNNER_TEMP/c9_51.patch"; git apply --check "$RUNNER_TEMP/c9_51.patch"; git apply "$RUNNER_TEMP/c9_51.patch"
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc >"$RUNNER_TEMP/c9_52.patch"; git apply --check "$RUNNER_TEMP/c9_52.patch"; git apply "$RUNNER_TEMP/c9_52.patch"
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+      - uses: actions/setup-go@v7
+        with: {go-version: '1.23.x', cache: false}
+      - name: Native Windows focused tests and build
+        working-directory: capo_local/src
+        shell: pwsh
+        run: |
+          go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+          go build -o "$env:RUNNER_TEMP\NEURA_CAPO_LOCAL_C9_53.exe" .
+          if(-not (Test-Path "$env:RUNNER_TEMP\NEURA_CAPO_LOCAL_C9_53.exe")){ throw 'native executable missing' }
