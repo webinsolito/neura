@@ -1,0 +1,255 @@
+name: NEURA C9.53 Bootstrap Recovery
+
+on:
+  push:
+    branches:
+      - validation/c9-53-bootstrap-recovery-20260922
+    paths:
+      - '.github/workflows/c9-53-bootstrap-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neura-c9-53-bootstrap-recovery
+  cancel-in-progress: true
+
+jobs:
+  recover-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recover complete tar members from both historical transports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, io, json, lzma, os, pathlib, shutil, tarfile, zlib
+
+          root = pathlib.Path(".")
+          work = pathlib.Path("/tmp/neura-recovery")
+          shutil.rmtree(work, ignore_errors=True)
+          work.mkdir(parents=True)
+
+          def sha256(b):
+              return hashlib.sha256(b).hexdigest()
+
+          def extract_complete_tar_members(tar_bytes, outdir, label):
+              outdir.mkdir(parents=True, exist_ok=True)
+              complete = {}
+              errors = []
+              tf = tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:")
+              while True:
+                  try:
+                      m = tf.next()
+                  except Exception as e:
+                      errors.append(f"tar-next:{type(e).__name__}:{e}")
+                      break
+                  if m is None:
+                      break
+                  name = pathlib.PurePosixPath(m.name)
+                  if name.is_absolute() or ".." in name.parts:
+                      errors.append(f"unsafe-path:{m.name}")
+                      continue
+                  if m.isdir():
+                      (outdir / pathlib.Path(*name.parts)).mkdir(parents=True, exist_ok=True)
+                      continue
+                  if not m.isfile():
+                      continue
+                  try:
+                      f = tf.extractfile(m)
+                      if f is None:
+                          errors.append(f"no-data:{m.name}")
+                          continue
+                      data = f.read()
+                  except Exception as e:
+                      errors.append(f"read:{m.name}:{type(e).__name__}:{e}")
+                      continue
+                  if len(data) != m.size:
+                      errors.append(f"partial:{m.name}:{len(data)}/{m.size}")
+                      continue
+                  dest = outdir / pathlib.Path(*name.parts)
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  dest.write_bytes(data)
+                  complete[m.name] = {"size": len(data), "sha256": sha256(data)}
+              return complete, errors
+
+          # Transport A: original gzip snapshot. zlib returns all recoverable prefix bytes
+          # even when the gzip trailer/end of stream is missing.
+          gz_path = root / "bootstrap/c9_38_source.tar.gz"
+          gz_raw = gz_path.read_bytes()
+          zg = zlib.decompressobj(16 + zlib.MAX_WBITS)
+          gz_tar = zg.decompress(gz_raw)
+          try:
+              gz_tar += zg.flush()
+          except Exception:
+              pass
+          gz_complete, gz_errors = extract_complete_tar_members(gz_tar, work / "gz", "gzip")
+
+          # Transport B: later base64/XZ transport.
+          parts = sorted((root / "bootstrap").glob("c9_38_src.b64.part-*"))
+          b64 = b"".join(p.read_bytes() for p in parts)
+          b64 = b"".join(b64.split())
+          b64_error = None
+          xz_complete, xz_errors = {}, []
+          xz_eof = False
+          xz_tar = b""
+          try:
+              # Strict decode first; canonical padding only when legal.
+              rem = len(b64) % 4
+              if rem == 1:
+                  raise ValueError(f"invalid base64 length {len(b64)} (mod 4 == 1)")
+              padded = b64 + (b"=" * ((4 - rem) % 4))
+              xz_raw = base64.b64decode(padded, validate=True)
+              xd = lzma.LZMADecompressor(format=lzma.FORMAT_AUTO)
+              xz_tar = xd.decompress(xz_raw)
+              xz_eof = xd.eof
+              xz_complete, xz_errors = extract_complete_tar_members(xz_tar, work / "xz", "xz")
+          except Exception as e:
+              b64_error = f"{type(e).__name__}:{e}"
+
+          # Compare independently recovered complete members. Never silently merge
+          # conflicting versions of the same source file.
+          overlap = sorted(set(gz_complete) & set(xz_complete))
+          conflicts = [p for p in overlap if gz_complete[p]["sha256"] != xz_complete[p]["sha256"]]
+          union = sorted(set(gz_complete) | set(xz_complete))
+
+          report = {
+              "gzip": {
+                  "raw_bytes": len(gz_raw),
+                  "stream_eof": bool(zg.eof),
+                  "tar_bytes_recovered": len(gz_tar),
+                  "complete_files": len(gz_complete),
+                  "errors_tail": gz_errors[-8:],
+              },
+              "xz_transport": {
+                  "parts": [p.name for p in parts],
+                  "base64_chars": len(b64),
+                  "decode_error": b64_error,
+                  "stream_eof": xz_eof,
+                  "tar_bytes_recovered": len(xz_tar),
+                  "complete_files": len(xz_complete),
+                  "errors_tail": xz_errors[-8:],
+              },
+              "overlap_files": len(overlap),
+              "conflicts": conflicts[:50],
+              "union_files": len(union),
+          }
+          print("RECOVERY_REPORT=" + json.dumps(report, sort_keys=True))
+
+          if conflicts:
+              raise SystemExit("Recovered transports disagree on complete source members; fail closed.")
+
+          # Build union only from complete members. Prefer XZ copy for overlaps,
+          # but only after digest equality above.
+          merged = work / "merged"
+          merged.mkdir()
+          for srcdir in (work / "gz", work / "xz"):
+              if not srcdir.exists():
+                  continue
+              for src in srcdir.rglob("*"):
+                  if not src.is_file():
+                      continue
+                  rel = src.relative_to(srcdir)
+                  dst = merged / rel
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  if dst.exists() and sha256(dst.read_bytes()) != sha256(src.read_bytes()):
+                      raise SystemExit(f"merge conflict: {rel}")
+                  shutil.copy2(src, dst)
+
+          srcroot = merged / "capo_local/src"
+          print(f"RECOVERED_SRC_EXISTS={srcroot.exists()}")
+          if srcroot.exists():
+              files = sorted(p for p in srcroot.rglob("*") if p.is_file())
+              print(f"RECOVERED_SRC_FILE_COUNT={len(files)}")
+              print("RECOVERED_SRC_FILES_BEGIN")
+              for p in files:
+                  rel = p.relative_to(merged)
+                  print(f"{rel} {p.stat().st_size} {sha256(p.read_bytes())}")
+              print("RECOVERED_SRC_FILES_END")
+
+          # Replace only source tree in workspace; keep overlays/bootstrap evidence.
+          target = root / "capo_local/src"
+          shutil.rmtree(target, ignore_errors=True)
+          if not srcroot.exists():
+              raise SystemExit("No recoverable capo_local/src tree.")
+          shutil.copytree(srcroot, target)
+          if not (target / "go.mod").is_file():
+              raise SystemExit("Recovered tree lacks capo_local/src/go.mod.")
+          PY
+
+      - name: Verify and apply C9.39 delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply --check /tmp/c9_39.patch
+          git apply /tmp/c9_39.patch
+
+      - name: Verify and apply C9.51 delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > /tmp/c9_51.patch
+          echo "43cc377e1f4297ddd40d5d3e3badbb7213640c008ce0dcdf30feeb035361b705  /tmp/c9_51.patch" | sha256sum -c -
+          git apply --check /tmp/c9_51.patch
+          git apply /tmp/c9_51.patch
+
+      - name: Verify and apply C9.52 delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > /tmp/c9_52.patch
+          echo "d6898f851664d90e02184bf005860b94ce3fb8d4d9d359593def1691c516409d  /tmp/c9_52.patch" | sha256sum -c -
+          git apply --check /tmp/c9_52.patch
+          git apply /tmp/c9_52.patch
+
+      - name: Apply C9.53 overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp capo_local/overlay_c9_53/*.go capo_local/src/
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Formatting gate
+        shell: bash
+        run: test -z "$(gofmt -l capo_local/src)"
+
+      - name: Vet
+        working-directory: capo_local/src
+        run: go vet ./...
+
+      - name: C9.53 focused tests
+        working-directory: capo_local/src
+        run: go test -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+
+      - name: Full anti-regression
+        working-directory: capo_local/src
+        run: go test -count=1 -skip 'TestStaticRecoveryBundleMatchesCurrentRelease|TestWindowsBootstrapC927Contract|TestCleanWindowsReadinessHarnessExists' ./...
+
+      - name: Focused race
+        working-directory: capo_local/src
+        run: go test -race -count=1 -run 'TestMemoryRetrieval|TestBuildMemoryQuery|TestBitNetCommandEmbeddingProvider|TestEffectiveEmbeddingTimeout' .
+
+      - name: Windows amd64 cross-build
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPO_LOCAL_C9_53.exe .
+          test -s /tmp/NEURA_CAPO_LOCAL_C9_53.exe
+
+      - name: Truthful status
+        if: always()
+        run: |
+          echo 'Stable promotion=NOT_PERFORMED'
+          echo 'Windows native execution=NOT_TESTED_BY_THIS_LINUX_JOB'
+          echo 'Recovery accepts only complete tar members and fails closed on cross-transport conflicts.'
