@@ -97,33 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("capo_local/src/autonomous_modules.go")
-          s = p.read_text()
-          marker = "\t\tif total+delta < spec.AggregateMin {\n\t\t\tdelta = spec.AggregateMin -"
-          if not s.endswith(marker):
-              raise SystemExit("unexpected truncation boundary; refusing speculative repair")
-          s += """ total
-		}
-		if delta == 0 {
-			continue
-		}
-		total += delta
-		out = append(out, AutonomousModuleAdjustment{
-			Category: category,
-			Name:     mod.Name,
-			Delta:    delta,
-		})
-		if total >= spec.AggregateMax || total <= spec.AggregateMin {
-			break
-		}
-	}
-	return out
-}
-"""
-          p.write_text(s)
-          PY
+          python3 -c 'from pathlib import Path; p=Path("capo_local/src/autonomous_modules.go"); s=p.read_text(); marker="\t\tif total+delta < spec.AggregateMin {\n\t\t\tdelta = spec.AggregateMin -"; assert s.endswith(marker), "unexpected truncation boundary"; tail=" total\n\t\t}\n\t\tif delta == 0 {\n\t\t\tcontinue\n\t\t}\n\t\ttotal += delta\n\t\tout = append(out, AutonomousModuleAdjustment{Category: category, Name: mod.Name, Delta: delta})\n\t\tif total >= spec.AggregateMax || total <= spec.AggregateMin {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn out\n}\n"; p.write_text(s+tail)'
           gofmt -w capo_local/src/autonomous_modules.go
 
       - name: Validate salvaged C9.38 baseline
