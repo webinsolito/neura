@@ -160,6 +160,15 @@ jobs:
           echo '--- evolution roadmap consumers ---'
           grep -R -n -E -C 4 'EvolutionRoadmapItem|EvolutionPlan' capo_local/src || true
 
+      - name: Inspect recovered evolution.go boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- evolution.go head/contracts ---'
+          nl -ba capo_local/src/evolution.go | head -n 180
+          echo '--- evolution.go truncation tail ---'
+          nl -ba capo_local/src/evolution.go | tail -n 120
+
       - name: Inspect missing Server and EvolutionManager base contracts
         shell: bash
         run: |
