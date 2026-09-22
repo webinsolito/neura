@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -170,5 +171,23 @@ func TestC953CommandEmbeddingProviderRejectsRelativeExecutable(t *testing.T) {
 	}
 	if _, err := p.Embed(context.Background(), "test"); err == nil {
 		t.Fatal("relative embedding executable executed")
+	}
+}
+
+
+func BenchmarkC953Retrieve500(b *testing.B) {
+	now := time.Now().UTC()
+	docs := make([]Memory, 500)
+	for i := range docs {
+		text := "NEURA memory retrieval document " + strconv.Itoa(i)
+		docs[i] = Memory{ID: idFor(text), Text: text, Entities: []string{"neura"}, CreatedAt: now.Add(-time.Duration(i) * time.Minute)}
+	}
+	q := MemoryQuery{Text: "NEURA memory retrieval", Entities: []string{"neura"}, Now: now, TopK: 10}
+	w := DefaultRetrievalWeights()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if got := RetrieveMemory(docs, q, w); len(got) == 0 {
+			b.Fatal("empty retrieval")
+		}
 	}
 }
