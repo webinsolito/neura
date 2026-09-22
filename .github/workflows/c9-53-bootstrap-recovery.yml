@@ -111,42 +111,103 @@ jobs:
           except Exception as e:
               b64_error = f"{type(e).__name__}:{e}"
 
-          # Transport C: the longer historical core transport. Its final part is
-          # incomplete, but parts 00..09 form an exact Base64 quartet boundary.
-          # Decode only that verified prefix; never guess the missing tail byte.
+          # Transport C: the longer historical core transport. Locate the first
+          # corruption, then search one missing Base64 character only inside the
+          # affected historical chunk. A candidate is trusted only after later
+          # cross-transport file digests agree.
           core_parts = sorted((root / "bootstrap").glob("core.b64.part-*"))
-          core_prefix_parts = [p for p in core_parts if p.name <= "core.b64.part-09"]
-          core_b64 = b"".join(p.read_bytes() for p in core_prefix_parts)
-          core_b64 = b"".join(core_b64.split())
+          core_clean_parts = [b"".join(p.read_bytes().split()) for p in core_parts]
+          core_full_b64 = b"".join(core_clean_parts)
           core_error = None
           core_eof = False
           core_tar = b""
           core_complete, core_errors = {}, []
-          try:
-              if len(core_b64) % 4 != 0:
-                  raise ValueError(f"core prefix not quartet aligned: {len(core_b64)}")
-              core_raw = base64.b64decode(core_b64, validate=True)
-              cd = lzma.LZMADecompressor(format=lzma.FORMAT_AUTO)
-              chunks = []
+          core_repair = None
+
+          def decompress_xz_progress(raw, step=512):
+              d = lzma.LZMADecompressor(format=lzma.FORMAT_AUTO)
+              outs = []
               pos = 0
-              step = 256
-              while pos < len(core_raw):
-                  chunk = core_raw[pos:pos+step]
+              err = None
+              while pos < len(raw):
+                  chunk = raw[pos:pos+step]
                   try:
-                      chunks.append(cd.decompress(chunk))
+                      outs.append(d.decompress(chunk))
                       pos += len(chunk)
                   except Exception as e:
-                      core_error = f"{type(e).__name__}:{e}:compressed_offset={pos}"
+                      err = f"{type(e).__name__}:{e}"
                       break
-              core_tar = b"".join(chunks)
-              core_eof = cd.eof
-              core_complete, core_errors = extract_complete_tar_members(core_tar, work / "core", "core-prefix")
+              return pos, b"".join(outs), d.eof, err
+
+          try:
+              # Parts 00..09 happen to end on a Base64 quartet boundary and are
+              # sufficient to locate the first compressed-stream corruption.
+              prefix_b64 = b"".join(core_clean_parts[:10])
+              prefix_raw = base64.b64decode(prefix_b64, validate=True)
+              base_pos, base_tar, base_eof, base_err = decompress_xz_progress(prefix_raw, step=256)
+
+              # The first failure maps inside part-01. Search a bounded window
+              # immediately before that failure for exactly one missing Base64 char.
+              alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+              p1_start = len(core_clean_parts[0])
+              p1_end = p1_start + len(core_clean_parts[1])
+              center = (base_pos * 4) // 3
+              lo = max(p1_start, center - 2048)
+              hi = min(p1_end, center + 128)
+              best = None
+
+              if base_err and len(core_full_b64) % 4 == 3:
+                  for ins_pos in range(lo, hi + 1):
+                      for ch in alphabet:
+                          repaired = core_full_b64[:ins_pos] + bytes([ch]) + core_full_b64[ins_pos:]
+                          # Search on a bounded prefix first. Wrong candidates fail
+                          # near the known corruption; the right one must pass it.
+                          sample = repaired[:60000]
+                          sample = sample[: (len(sample) // 4) * 4]
+                          try:
+                              raw = base64.b64decode(sample, validate=True)
+                          except Exception:
+                              continue
+                          processed, out, eof, err = decompress_xz_progress(raw, step=1024)
+                          score = (processed, len(out))
+                          if best is None or score > best[0]:
+                              best = (score, ins_pos, ch, err)
+                          if processed == len(raw) and err is None:
+                              best = (score, ins_pos, ch, err)
+                              break
+                      if best is not None and best[0][0] == len(base64.b64decode((core_full_b64[:best[1]] + bytes([best[2]]) + core_full_b64[best[1]:])[:60000], validate=True)):
+                          break
+
+              if best is not None:
+                  _, ins_pos, ch, _ = best
+                  repaired = core_full_b64[:ins_pos] + bytes([ch]) + core_full_b64[ins_pos:]
+                  raw = base64.b64decode(repaired, validate=True)
+                  processed, core_tar, core_eof, err = decompress_xz_progress(raw, step=512)
+                  core_error = None if err is None else f"{err}:compressed_offset={processed}"
+                  core_repair = {
+                      "insert_global_pos": ins_pos,
+                      "insert_part": "core.b64.part-01",
+                      "insert_part_offset": ins_pos - p1_start,
+                      "insert_char": chr(ch),
+                      "search_center": center,
+                      "search_window": [lo, hi],
+                      "processed_compressed_bytes": processed,
+                      "decoded_bytes": len(raw),
+                      "xz_eof": core_eof,
+                      "error": core_error,
+                  }
+                  core_complete, core_errors = extract_complete_tar_members(core_tar, work / "core", "core-repaired")
+              else:
+                  core_tar = base_tar
+                  core_eof = base_eof
+                  core_error = None if base_err is None else f"{base_err}:compressed_offset={base_pos}"
+                  core_complete, core_errors = extract_complete_tar_members(core_tar, work / "core", "core-prefix")
           except Exception as e:
               core_error = f"{type(e).__name__}:{e}"
 
           # Compare independently recovered complete members. Never silently merge
           # conflicting versions of the same source file.
-          maps = [("gzip", gz_complete), ("xz", xz_complete), ("core_prefix", core_complete)]
+          maps = [("gzip", gz_complete), ("xz", xz_complete), ("core_repaired", core_complete)]
           paths = sorted(set().union(*(set(m) for _, m in maps)))
           conflicts = []
           overlap_files = 0
@@ -175,14 +236,15 @@ jobs:
                   "complete_files": len(xz_complete),
                   "errors_tail": xz_errors[-8:],
               },
-              "core_prefix_transport": {
-                  "parts": [p.name for p in core_prefix_parts],
-                  "base64_chars": len(core_b64),
+              "core_recovery_transport": {
+                  "parts": [p.name for p in core_parts],
+                  "base64_chars": len(core_full_b64),
                   "decode_error": core_error,
                   "stream_eof": core_eof,
                   "tar_bytes_recovered": len(core_tar),
                   "complete_files": len(core_complete),
                   "errors_tail": core_errors[-8:],
+                  "repair": core_repair,
               },
               "overlap_files": overlap_files,
               "conflicts": conflicts[:50],
