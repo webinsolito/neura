@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 -d > /tmp/verified_core.tar.xz
+          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 --ignore-garbage -d > /tmp/verified_core.tar.xz
           xz -t /tmp/verified_core.tar.xz
           rm -rf capo_local/src
           xz -dc /tmp/verified_core.tar.xz | tar -xf -
@@ -148,7 +148,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 -d > "$RUNNER_TEMP/verified_core.tar.xz"
+          cat bootstrap/core.b64.part-* | tr -d '\r\n' | base64 --ignore-garbage -d > "$RUNNER_TEMP/verified_core.tar.xz"
           xz -t "$RUNNER_TEMP/verified_core.tar.xz"
           rm -rf capo_local/src
           xz -dc "$RUNNER_TEMP/verified_core.tar.xz" | tar -xf -
