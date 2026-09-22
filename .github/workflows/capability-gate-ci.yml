@@ -1,0 +1,127 @@
+name: NEURA Capability Gate Passport Validation
+
+on:
+  push:
+    branches:
+      - candidate/capability-gate-passport
+    paths:
+      - 'v1_bridge/**'
+      - '.github/workflows/capability-gate-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neura-capability-gate-passport
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Normalize formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w v1_bridge
+          test -z "$(gofmt -l v1_bridge)"
+
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+
+      - name: Capability focused security tests
+        working-directory: v1_bridge
+        run: go test -count=1 -run '^TestCapability' .
+
+      - name: Full anti-regression
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+
+      - name: Race
+        working-directory: v1_bridge
+        run: go test -race -count=1 ./...
+
+      - name: Windows cross-build
+        working-directory: v1_bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_CAPABILITY_GATE.exe .
+          test -s /tmp/NEURA_CAPABILITY_GATE.exe
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Native capability and full tests
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          go test -count=1 -run '^TestCapability' .
+          go test -count=1 ./...
+          go build -o "$env:RUNNER_TEMP\NEURA_CAPABILITY_GATE.exe" .
+          if(-not (Test-Path "$env:RUNNER_TEMP\NEURA_CAPABILITY_GATE.exe")){ throw "native executable missing" }
+
+      - name: Native startup capability and tool smoke
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP "neura-cap-data"
+          $workspace = Join-Path $env:RUNNER_TEMP "neura-cap-workspace"
+          New-Item -ItemType Directory -Force -Path $data,$workspace | Out-Null
+          Set-Content -Path (Join-Path $workspace "visible.txt") -Value "capability gate smoke"
+          $exe = Join-Path $env:RUNNER_TEMP "NEURA_CAPABILITY_GATE.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList @("-listen","127.0.0.1:8769","-data",$data,"-workspace",$workspace) -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for($i=0;$i -lt 30;$i++){
+              Start-Sleep -Milliseconds 300
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8769/health"
+                $ok = $true
+                break
+              } catch {}
+            }
+            if(-not $ok){ throw "capability-gated bridge did not become healthy" }
+            if(-not $health.ok){ throw "health did not report ok" }
+
+            $caps = Invoke-RestMethod -Uri "http://127.0.0.1:8769/capabilities"
+            if($caps.gate -ne "active"){ throw "capability gate not active" }
+            if($caps.passport -ne "hmac-sha256"){ throw "unexpected passport scheme" }
+            if($caps.tool_capabilities.'fs.read' -ne "fs.read"){ throw "fs.read capability mapping missing" }
+
+            $statusBody = @{goal="stato"} | ConvertTo-Json
+            $status = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $statusBody -Uri "http://127.0.0.1:8769/command"
+            if($status.status -ne "ok" -or -not $status.results[0].verified){ throw "authorized system.info failed" }
+
+            $readBody = @{goal="leggi file visible.txt"} | ConvertTo-Json
+            $read = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $readBody -Uri "http://127.0.0.1:8769/command"
+            if($read.status -ne "ok" -or -not $read.results[0].verified){ throw "authorized fs.read failed" }
+
+            $secret = Join-Path $workspace ".env"
+            Set-Content -Path $secret -Value "TOKEN=secret"
+            $secretBody = @{goal="leggi file .env"} | ConvertTo-Json
+            try {
+              Invoke-RestMethod -Method Post -ContentType "application/json" -Body $secretBody -Uri "http://127.0.0.1:8769/command"
+              throw "secret firewall request unexpectedly succeeded"
+            } catch {
+              if($_.Exception.Response.StatusCode.value__ -ne 400){ throw }
+            }
+          } finally {
+            if($p -and -not $p.HasExited){ Stop-Process -Id $p.Id -Force }
+          }
