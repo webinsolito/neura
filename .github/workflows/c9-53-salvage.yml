@@ -100,6 +100,13 @@ jobs:
           python3 -c 'from pathlib import Path; p=Path("capo_local/src/autonomous_modules.go"); s=p.read_text(); marker="\t\tif total+delta < spec.AggregateMin {\n\t\t\tdelta = spec.AggregateMin -"; assert s.endswith(marker), "unexpected truncation boundary"; tail=" total\n\t\t}\n\t\tif delta == 0 {\n\t\t\tcontinue\n\t\t}\n\t\ttotal += delta\n\t\tout = append(out, AutonomousModuleAdjustment{Category: category, Name: mod.Name, Delta: delta})\n\t\tif total >= spec.AggregateMax || total <= spec.AggregateMin {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn out\n}\n"; p.write_text(s+tail)'
           gofmt -w capo_local/src/autonomous_modules.go
 
+      - name: Reconstruct missing common hardware contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'from pathlib import Path; Path("capo_local/src/hardware_recovered.go").write_text("package main\n\nimport \"runtime\"\n\nconst gib uint64 = 1024 * 1024 * 1024\n\ntype HardwareProfile struct {\n\tRAMBytes uint64\n\tFreeDiskBytes uint64\n\tLogicalCPUs int\n\tOS string\n\tArch string\n}\n\ntype LocalModelPlan struct {\n\tMode string\n\tReason string\n}\n\nfunc DetectHardwareProfile(root string) HardwareProfile {\n\tram, _ := detectSystemMemoryBytes()\n\tdisk, _ := detectFreeDiskBytes(root)\n\treturn HardwareProfile{RAMBytes: ram, FreeDiskBytes: disk, LogicalCPUs: runtime.NumCPU(), OS: runtime.GOOS, Arch: runtime.GOARCH}\n}\n\nfunc ChooseLocalModelPlan(hw HardwareProfile) LocalModelPlan {\n\tif hw.RAMBytes >= 16*gib { return LocalModelPlan{Mode: \"local_full\", Reason: \"ram>=16GiB\"} }\n\tif hw.RAMBytes >= 8*gib { return LocalModelPlan{Mode: \"local_compact\", Reason: \"ram>=8GiB\"} }\n\treturn LocalModelPlan{Mode: \"local_minimal\", Reason: \"ram<8GiB_or_unknown\"}\n}\n")'
+          gofmt -w capo_local/src/hardware_recovered.go
+
       - name: Inspect missing hardware contract
         shell: bash
         run: |
