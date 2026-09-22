@@ -1,0 +1,126 @@
+name: NEURA V1 RC2 Integration Validation
+
+on:
+  push:
+    branches:
+      - candidate/v1-integration-rc2-main-sync
+    paths:
+      - 'v1_bridge/**'
+      - '.github/workflows/v1-rc2-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neura-v1-rc2-integration
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Normalize and verify formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w v1_bridge
+          test -z "$(gofmt -l v1_bridge)"
+
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+
+      - name: Full unit integration security recovery
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+
+      - name: C9.53 focused
+        working-directory: v1_bridge
+        run: go test -count=1 -run '^TestC953' .
+
+      - name: Race
+        working-directory: v1_bridge
+        run: go test -race -count=1 ./...
+
+      - name: C9.53 retrieval benchmark smoke
+        working-directory: v1_bridge
+        run: go test -run '^$' -bench '^BenchmarkC953' -benchtime=100x .
+
+      - name: Windows cross-build
+        working-directory: v1_bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_V1_RC2.exe .
+          test -s /tmp/NEURA_V1_RC2.exe
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Native full tests and build
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          go test -count=1 ./...
+          go test -count=1 -run '^TestC953' .
+          go build -o "$env:RUNNER_TEMP\NEURA_V1_RC2.exe" .
+          if(-not (Test-Path "$env:RUNNER_TEMP\NEURA_V1_RC2.exe")){ throw "native executable missing" }
+
+      - name: Native startup health memory and Windows observe smoke
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP "neura-v1-rc2-data"
+          $workspace = Join-Path $env:RUNNER_TEMP "neura-v1-rc2-workspace"
+          New-Item -ItemType Directory -Force -Path $data,$workspace | Out-Null
+          $exe = Join-Path $env:RUNNER_TEMP "NEURA_V1_RC2.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList @("-listen","127.0.0.1:8767","-data",$data,"-workspace",$workspace) -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for($i=0;$i -lt 30;$i++){
+              Start-Sleep -Milliseconds 300
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8767/health"
+                $ok = $true
+                break
+              } catch {}
+            }
+            if(-not $ok){ throw "RC2 bridge did not become healthy" }
+            if(-not $health.ok){ throw "health did not report ok" }
+
+            $status = Invoke-RestMethod -Uri "http://127.0.0.1:8767/status"
+            if($status.core -ne "online"){ throw "core not online" }
+
+            $body = @{text="NEURA C9.53 integration Windows native"} | ConvertTo-Json
+            $saved = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $body -Uri "http://127.0.0.1:8767/memory"
+            if(-not $saved.created){ throw "memory was not created" }
+
+            $found = Invoke-RestMethod -Uri "http://127.0.0.1:8767/memory?q=NEURA%20integration&limit=5"
+            if($found.items.Count -lt 1){ throw "retrieval returned no results" }
+            if($found.items[0].text -notmatch "NEURA"){ throw "retrieval returned wrong result" }
+
+            $cmd = @{goal="processi windows"} | ConvertTo-Json
+            $obs = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $cmd -Uri "http://127.0.0.1:8767/command"
+            if($obs.status -ne "ok"){ throw "Windows observe failed" }
+            if(-not $obs.results[0].verified){ throw "Windows observe not verified" }
+
+            $receipts = Invoke-RestMethod -Uri "http://127.0.0.1:8767/receipts?limit=10"
+            if($receipts.items.Count -lt 1){ throw "expected receipts missing" }
+          } finally {
+            if($p -and -not $p.HasExited){ Stop-Process -Id $p.Id -Force }
+          }
