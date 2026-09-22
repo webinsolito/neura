@@ -1,0 +1,113 @@
+name: C9.53 Memory Retrieval Rebuild
+
+on:
+  push:
+    branches:
+      - candidate/c9-53-memory-retrieval-rebuild
+    paths:
+      - 'v1_bridge/**'
+      - '.github/workflows/c9-53-rebuild-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neura-c9-53-rebuild
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l v1_bridge)"
+
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+
+      - name: Focused C9.53
+        working-directory: v1_bridge
+        run: go test -count=1 -run '^TestC953' .
+
+      - name: Full anti-regression
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+
+      - name: Focused race
+        working-directory: v1_bridge
+        run: go test -race -count=1 -run '^TestC953' .
+
+      - name: Retrieval benchmark smoke
+        working-directory: v1_bridge
+        run: go test -run '^$' -bench '^BenchmarkC953' -benchtime=100x .
+
+      - name: Windows cross-build
+        working-directory: v1_bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_C9_53_REBUILD.exe .
+          test -s /tmp/NEURA_C9_53_REBUILD.exe
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Native focused and full tests
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          go test -count=1 -run '^TestC953' .
+          go test -count=1 ./...
+          go build -o "$env:RUNNER_TEMP\NEURA_C9_53_REBUILD.exe" .
+
+      - name: Native startup and memory retrieval smoke
+        working-directory: v1_bridge
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP "neura-c953-data"
+          $workspace = Join-Path $env:RUNNER_TEMP "neura-c953-workspace"
+          New-Item -ItemType Directory -Force -Path $data,$workspace | Out-Null
+          $exe = Join-Path $env:RUNNER_TEMP "NEURA_C9_53_REBUILD.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList @("-listen","127.0.0.1:8766","-data",$data,"-workspace",$workspace) -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for($i=0;$i -lt 30;$i++){
+              Start-Sleep -Milliseconds 300
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8766/health"
+                $ok = $true
+                break
+              } catch {}
+            }
+            if(-not $ok){ throw "C9.53 rebuild bridge did not become healthy" }
+            if(-not $health.ok){ throw "health did not report ok" }
+
+            $body = @{text="NEURA memoria retrieval Windows nativo"} | ConvertTo-Json
+            $saved = Invoke-RestMethod -Method Post -ContentType "application/json" -Body $body -Uri "http://127.0.0.1:8766/memory"
+            if(-not $saved.created){ throw "native memory was not created" }
+
+            $found = Invoke-RestMethod -Uri "http://127.0.0.1:8766/memory?q=NEURA%20retrieval&limit=5"
+            if($found.items.Count -lt 1){ throw "native retrieval returned no results" }
+            if($found.items[0].text -notmatch "NEURA"){ throw "native retrieval returned wrong top result" }
+          } finally {
+            if($p -and -not $p.HasExited){ Stop-Process -Id $p.Id -Force }
+          }
