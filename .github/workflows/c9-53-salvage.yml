@@ -82,7 +82,22 @@ jobs:
 
           rm -rf capo_local/src
           cp -a "$src" capo_local/src
-          echo "selected_file_count=$(find capo_local/src -type f | wc -l)"
+
+          # Historical transports are complementary. Merge only files absent
+          # from the richest source; never overwrite an already recovered file.
+          if [ -d /tmp/c9-core/capo_local/src ]; then
+            cp -an /tmp/c9-core/capo_local/src/. capo_local/src/
+          fi
+          if [ -d /tmp/c9-gz/capo_local/src ]; then
+            cp -an /tmp/c9-gz/capo_local/src/. capo_local/src/
+          fi
+
+          echo "merged_file_count=$(find capo_local/src -type f | wc -l)"
+          echo "merged_unique_from_core_gzip:"
+          comm -13 <(sed 's#^/tmp/c9-src/capo_local/src/##' /tmp/c9-src-files.txt | sort) <(
+            { sed 's#^/tmp/c9-core/capo_local/src/##' /tmp/c9-core-files.txt;
+              sed 's#^/tmp/c9-gz/capo_local/src/##' /tmp/c9-gz-files.txt; } | sort -u
+          ) || true
           find capo_local/src -maxdepth 2 -type f | sort
           test -f capo_local/src/go.mod
 
