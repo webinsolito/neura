@@ -1,0 +1,1 @@
+One-shot V1 validation using verified core transport.
