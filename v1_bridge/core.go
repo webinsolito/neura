@@ -25,10 +25,12 @@ import (
 const version = "1.0.0-rc1"
 
 type Memory struct {
-	ID string `json:"id"`
-	Text string `json:"text"`
-	Persistent bool `json:"persistent"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	Text       string    `json:"text"`
+	Persistent bool      `json:"persistent"`
+	CreatedAt  time.Time `json:"created_at"`
+	Entities   []string  `json:"entities,omitempty"`
+	Embedding  []float32 `json:"embedding,omitempty"`
 }
 type Receipt struct {
 	ID string `json:"id"`
@@ -86,22 +88,14 @@ func appendJSONL(path string,v any)error{
 func normalizeText(s string)string{return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s)))," ")}
 func idFor(s string)string{h:=sha256.Sum256([]byte(normalizeText(s)));return hex.EncodeToString(h[:12])}
 func (s *Store)SaveMemory(text string)(Memory,bool,error){
-	text=strings.TrimSpace(text);if text==""{return Memory{},false,errors.New("empty memory")};if len([]byte(text))>32*1024{return Memory{},false,errors.New("memory too large")}
-	m:=Memory{ID:idFor(text),Text:text,Persistent:true,CreatedAt:time.Now().UTC()};s.mu.Lock();defer s.mu.Unlock()
-	for _,x:=range s.memories{if x.ID==m.ID{return x,false,nil}}
-	if err:=appendJSONL(filepath.Join(s.dir,"memory.jsonl"),m);err!=nil{return Memory{},false,err}
-	s.memories=append(s.memories,m);return m,true,nil
+	return s.SaveMemoryWithEmbedding(context.Background(), text, nil)
 }
 func tokens(s string)[]string{
 	f:=strings.FieldsFunc(strings.ToLower(s),func(r rune)bool{return !(r>='a'&&r<='z'||r>='0'&&r<='9'||r>='À'&&r<='ÿ')})
 	seen:=map[string]bool{};out:=[]string{};for _,t:=range f{if len(t)<2||seen[t]{continue};seen[t]=true;out=append(out,t)};return out
 }
 func (s *Store)SearchMemory(q string,limit int)[]Memory{
-	if limit<=0||limit>50{limit=10};qs:=tokens(q);s.mu.Lock();cp:=append([]Memory(nil),s.memories...);s.mu.Unlock()
-	type scored struct{m Memory;s float64};ss:=make([]scored,0,len(cp));now:=time.Now().UTC()
-	for _,m:=range cp{mt:=tokens(m.Text);set:=map[string]bool{};for _,t:=range mt{set[t]=true};hit:=0;for _,q:=range qs{if set[q]{hit++}};score:=float64(hit);age:=now.Sub(m.CreatedAt).Hours()/24;if age>=0{score+=0.15/(1+age/30)};if len(qs)==0{score=.01};if score>0{ss=append(ss,scored{m,score})}}
-	sort.SliceStable(ss,func(i,j int)bool{if ss[i].s==ss[j].s{return ss[i].m.CreatedAt.After(ss[j].m.CreatedAt)};return ss[i].s>ss[j].s})
-	if len(ss)>limit{ss=ss[:limit]};out:=make([]Memory,len(ss));for i,x:=range ss{out[i]=x.m};return out
+	return s.SearchMemoryHybrid(context.Background(), q, limit, nil)
 }
 func (s *Store)AddReceipt(r Receipt)error{s.mu.Lock();defer s.mu.Unlock();if err:=appendJSONL(filepath.Join(s.dir,"receipts.jsonl"),r);err!=nil{return err};s.receipts=append(s.receipts,r);return nil}
 func (s *Store)RecentReceipts(limit int)[]Receipt{if limit<=0||limit>100{limit=20};s.mu.Lock();defer s.mu.Unlock();n:=len(s.receipts);start:=n-limit;if start<0{start=0};out:=append([]Receipt(nil),s.receipts[start:]...);for i,j:=0,len(out)-1;i<j;i,j=i+1,j-1{out[i],out[j]=out[j],out[i]};return out}
@@ -147,14 +141,14 @@ type limitedBuffer struct{b []byte;limit int;exceeded bool}
 func(l *limitedBuffer)Write(p []byte)(int,error){n:=len(p);remaining:=l.limit-len(l.b);if remaining<=0{l.exceeded=true;return n,nil};if n>remaining{l.b=append(l.b,p[:remaining]...);l.exceeded=true}else{l.b=append(l.b,p...)};return n,nil}
 
 type CommandResult struct{Goal string `json:"goal"`;Status string `json:"status"`;Plan *Plan `json:"plan,omitempty"`;Results []ToolResult `json:"results,omitempty"`;Memory []Memory `json:"memory,omitempty"`;Message string `json:"message,omitempty"`;ReceiptIDs []string `json:"receipt_ids,omitempty"`}
-type Core struct{store *Store;tools *ToolRegistry;model ModelAdapter}
+type Core struct{store *Store;tools *ToolRegistry;model ModelAdapter;embedding LocalEmbeddingProvider}
 func receiptID(action string,t time.Time)string{return idFor(action+t.UTC().Format(time.RFC3339Nano))}
 func(c *Core)receipt(goal,action,status,detail,errText string,start time.Time)string{r:=Receipt{ID:receiptID(action,start),Goal:goal,Action:action,Status:status,Detail:detail,Error:errText,StartedAt:start,FinishedAt:time.Now().UTC()};_=c.store.AddReceipt(r);return r.ID}
 func prefixValue(goal string,prefixes ...string)(string,bool){g:=strings.TrimSpace(goal);low:=strings.ToLower(g);for _,p:=range prefixes{if strings.HasPrefix(low,p){return strings.TrimSpace(g[len(p):]),true}};return "",false}
 func(c *Core)Execute(ctx context.Context,goal string)CommandResult{
 	goal=strings.TrimSpace(goal);res:=CommandResult{Goal:goal};if goal==""{res.Status="blocked";res.Message="empty goal";return res};if len([]byte(goal))>64*1024{res.Status="blocked";res.Message="goal too large";return res}
-	if v,ok:=prefixValue(goal,"ricorda ","remember ");ok{st:=time.Now().UTC();m,created,err:=c.store.SaveMemory(v);if err!=nil{res.Status="error";res.Message=err.Error();res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","error","",err.Error(),st)};return res};res.Status="ok";res.Memory=[]Memory{m};if created{res.Message="memory saved"}else{res.Message="duplicate memory already present"};res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","verified",res.Message,"",st)};return res}
-	if v,ok:=prefixValue(goal,"cerca memoria ","search memory ","ricorda su ");ok{st:=time.Now().UTC();res.Memory=c.store.SearchMemory(v,10);res.Status="ok";res.Message=fmt.Sprintf("%d memories found",len(res.Memory));res.ReceiptIDs=[]string{c.receipt(goal,"memory.search","verified",res.Message,"",st)};return res}
+	if v,ok:=prefixValue(goal,"ricorda ","remember ");ok{st:=time.Now().UTC();m,created,err:=c.store.SaveMemoryWithEmbedding(ctx,v,c.embedding);if err!=nil{res.Status="error";res.Message=err.Error();res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","error","",err.Error(),st)};return res};res.Status="ok";res.Memory=[]Memory{m};if created{res.Message="memory saved"}else{res.Message="duplicate memory already present"};res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","verified",res.Message,"",st)};return res}
+	if v,ok:=prefixValue(goal,"cerca memoria ","search memory ","ricorda su ");ok{st:=time.Now().UTC();res.Memory=c.store.SearchMemoryHybrid(ctx,v,10,c.embedding);res.Status="ok";res.Message=fmt.Sprintf("%d memories found",len(res.Memory));res.ReceiptIDs=[]string{c.receipt(goal,"memory.search","verified",res.Message,"",st)};return res}
 	low:=strings.ToLower(goal);if low=="stato"||low=="status"||low=="stato sistema"{st:=time.Now().UTC();tr:=c.tools.Run(ctx,"system.info",nil);res.Status="ok";res.Results=[]ToolResult{tr};res.ReceiptIDs=[]string{c.receipt(goal,"system.info","verified","system info returned","",st)};return res}
 	if v,ok:=prefixValue(goal,"lista file ","list files ");ok{st:=time.Now().UTC();tr:=c.tools.Run(ctx,"fs.list",map[string]string{"path":v});res.Results=[]ToolResult{tr};if tr.Error!=""{res.Status="blocked";res.Message=tr.Error;res.ReceiptIDs=[]string{c.receipt(goal,"fs.list","blocked","",tr.Error,st)}}else{res.Status="ok";res.Message="directory listed";res.ReceiptIDs=[]string{c.receipt(goal,"fs.list","verified",res.Message,"",st)}};return res}
 	if v,ok:=prefixValue(goal,"leggi file ","read file ");ok{st:=time.Now().UTC();tr:=c.tools.Run(ctx,"fs.read",map[string]string{"path":v});res.Results=[]ToolResult{tr};if tr.Error!=""{res.Status="blocked";res.Message=tr.Error;res.ReceiptIDs=[]string{c.receipt(goal,"fs.read","blocked","",tr.Error,st)}}else{res.Status="ok";res.Message="file read and verified";res.ReceiptIDs=[]string{c.receipt(goal,"fs.read","verified",res.Message,"",st)}};return res}
