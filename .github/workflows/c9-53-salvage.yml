@@ -104,8 +104,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '--- HardwareProfile references ---'
-          grep -R -n -C 4 'HardwareProfile' capo_local/src || true
+          echo '--- hardware/model plan references ---'
+          grep -R -n -E -C 3 'HardwareProfile|LocalModelPlan|DetectHardwareProfile|ChooseLocalModelPlan|gib' capo_local/src || true
           echo '--- hardware files ---'
           for f in capo_local/src/hardware*.go; do
             echo "### $f"
