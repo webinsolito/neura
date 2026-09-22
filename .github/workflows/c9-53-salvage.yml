@@ -83,14 +83,47 @@ jobs:
           rm -rf capo_local/src
           cp -a "$src" capo_local/src
 
-          # Historical transports are complementary. Merge only files absent
-          # from the richest source; never overwrite an already recovered file.
-          if [ -d /tmp/c9-core/capo_local/src ]; then
-            cp -an /tmp/c9-core/capo_local/src/. capo_local/src/
-          fi
-          if [ -d /tmp/c9-gz/capo_local/src ]; then
-            cp -an /tmp/c9-gz/capo_local/src/. capo_local/src/
-          fi
+          # Historical transports are complementary. For duplicate paths,
+          # prefer the longest recovered copy only when every shorter copy is
+          # an exact byte-for-byte prefix of it. This recovers truncation tails
+          # without inventing or silently replacing divergent source.
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          roots = [
+              Path("/tmp/c9-src/capo_local/src"),
+              Path("/tmp/c9-core/capo_local/src"),
+              Path("/tmp/c9-gz/capo_local/src"),
+          ]
+          dstroot = Path("capo_local/src")
+          rels = sorted({
+              p.relative_to(root)
+              for root in roots if root.exists()
+              for p in root.rglob("*") if p.is_file()
+          })
+
+          for rel in rels:
+              copies = []
+              for root in roots:
+                  p = root / rel
+                  if p.is_file():
+                      copies.append((p, p.read_bytes()))
+              if not copies:
+                  continue
+              copies.sort(key=lambda x: len(x[1]), reverse=True)
+              best_path, best = copies[0]
+              for other_path, other in copies[1:]:
+                  if not best.startswith(other):
+                      raise SystemExit(
+                          f"divergent recovered copies for {rel}: "
+                          f"{best_path} len={len(best)} vs {other_path} len={len(other)}"
+                      )
+              dst = dstroot / rel
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              dst.write_bytes(best)
+              print(f"selected_longest_prefix_safe {rel} bytes={len(best)} from={best_path}")
+          PY
 
           echo "merged_file_count=$(find capo_local/src -type f | wc -l)"
           echo "merged_unique_from_core_gzip:"
