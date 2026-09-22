@@ -12,7 +12,7 @@ permissions:
 jobs:
   salvage:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -21,12 +21,12 @@ jobs:
           go-version: '1.23.x'
           cache: false
 
-      - name: Salvage both historical C9.38 transports
+      - name: Salvage all historical C9.38 transports
         shell: bash
         run: |
           set -u
-          rm -rf /tmp/c9-gz /tmp/c9-core /tmp/c9-gz.tar /tmp/c9-core.tar /tmp/c9-core.xz /tmp/core.b64
-          mkdir -p /tmp/c9-gz /tmp/c9-core
+          rm -rf /tmp/c9-gz /tmp/c9-core /tmp/c9-src /tmp/c9-gz.tar /tmp/c9-core.tar /tmp/c9-src.tar /tmp/c9-core.xz /tmp/c9-src.xz /tmp/core.b64 /tmp/src.b64
+          mkdir -p /tmp/c9-gz /tmp/c9-core /tmp/c9-src
 
           set +e
           gzip -dc bootstrap/c9_38_source.tar.gz > /tmp/c9-gz.tar
@@ -36,37 +36,53 @@ jobs:
 
           cat bootstrap/core.b64.part-* | tr -d '\r\n\t ' > /tmp/core.b64
           base64 -d /tmp/core.b64 > /tmp/c9-core.xz
-          b64_rc=$?
+          core_b64_rc=$?
           xz -dc /tmp/c9-core.xz > /tmp/c9-core.tar
-          xz_rc=$?
+          core_xz_rc=$?
           tar -xf /tmp/c9-core.tar -C /tmp/c9-core --ignore-zeros
           core_tar_rc=$?
+
+          cat bootstrap/c9_38_src.b64.part-* | tr -d '\r\n\t ' > /tmp/src.b64
+          base64 -d /tmp/src.b64 > /tmp/c9-src.xz
+          src_b64_rc=$?
+          xz -dc /tmp/c9-src.xz > /tmp/c9-src.tar
+          src_xz_rc=$?
+          tar -xf /tmp/c9-src.tar -C /tmp/c9-src --ignore-zeros
+          src_tar_rc=$?
           set -e
 
           echo "gzip_rc=$gzip_rc gzip_tar_rc=$gz_tar_rc"
-          echo "base64_rc=$b64_rc xz_rc=$xz_rc core_tar_rc=$core_tar_rc"
+          echo "core_base64_rc=$core_b64_rc core_xz_rc=$core_xz_rc core_tar_rc=$core_tar_rc"
+          echo "src_base64_rc=$src_b64_rc src_xz_rc=$src_xz_rc src_tar_rc=$src_tar_rc"
 
           find /tmp/c9-gz -type f | sort | tee /tmp/c9-gz-files.txt
           find /tmp/c9-core -type f | sort | tee /tmp/c9-core-files.txt
+          find /tmp/c9-src -type f | sort | tee /tmp/c9-src-files.txt
           gz_count=$(wc -l < /tmp/c9-gz-files.txt)
           core_count=$(wc -l < /tmp/c9-core-files.txt)
+          src_count=$(wc -l < /tmp/c9-src-files.txt)
           echo "gzip_recovered_files=$gz_count"
           echo "core_recovered_files=$core_count"
+          echo "src_recovered_files=$src_count"
 
           src=""
-          if [ -f /tmp/c9-core/capo_local/src/go.mod ]; then
+          if [ -f /tmp/c9-src/capo_local/src/go.mod ]; then
+            src=/tmp/c9-src/capo_local/src
+            echo "selected=c9_38_src_transport"
+          elif [ -f /tmp/c9-core/capo_local/src/go.mod ]; then
             src=/tmp/c9-core/capo_local/src
             echo "selected=core_transport"
           elif [ -f /tmp/c9-gz/capo_local/src/go.mod ]; then
             src=/tmp/c9-gz/capo_local/src
             echo "selected=gzip_snapshot"
           else
-            echo "Neither salvage contains capo_local/src/go.mod"
+            echo "No salvaged transport contains capo_local/src/go.mod"
             exit 1
           fi
 
           rm -rf capo_local/src
           cp -a "$src" capo_local/src
+          echo "selected_file_count=$(find capo_local/src -type f | wc -l)"
           find capo_local/src -maxdepth 2 -type f | sort
           test -f capo_local/src/go.mod
 
