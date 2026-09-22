@@ -145,6 +145,23 @@ jobs:
           echo '--- evolution roadmap consumers ---'
           grep -R -n -E -C 4 'EvolutionRoadmapItem|EvolutionPlan' capo_local/src || true
 
+      - name: Inspect missing Server and EvolutionManager base contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- Server receiver field accesses ---'
+          grep -RhoE 's\.[A-Za-z_][A-Za-z0-9_]*' capo_local/src/*.go | sort -u || true
+          echo '--- EvolutionManager receiver field accesses ---'
+          grep -RhoE 'm\.[A-Za-z_][A-Za-z0-9_]*' capo_local/src/*.go | sort -u || true
+          echo '--- Config field accesses ---'
+          grep -RhoE '(cfg|m\.cfg|s\.cfg)\.[A-Za-z_][A-Za-z0-9_]*' capo_local/src/*.go | sort -u || true
+          echo '--- EvolutionTestRun usages ---'
+          grep -R -n -C 5 'EvolutionTestRun' capo_local/src || true
+          echo '--- EvolutionManager literals/tests ---'
+          grep -R -n -C 5 'EvolutionManager{' capo_local/src || true
+          echo '--- Server literals/tests ---'
+          grep -R -n -C 3 'Server{' capo_local/src | head -n 500 || true
+
       - name: Validate salvaged C9.38 baseline
         shell: bash
         run: |
