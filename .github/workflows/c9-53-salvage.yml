@@ -121,6 +121,12 @@ jobs:
           echo '--- diagnostics.go ---'
           nl -ba capo_local/src/diagnostics.go
 
+      - name: Inspect missing runtime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -n -E -C 3 'RuntimeProbeResult|LocalRuntimeSupervisor|runtimeSupervisor|NewLocalRuntimeSupervisor|\.Probe\(' capo_local/src || true
+
       - name: Validate salvaged C9.38 baseline
         shell: bash
         run: |
@@ -128,8 +134,8 @@ jobs:
           cd capo_local/src
           gofmt -w .
           test -z "$(gofmt -l .)"
-          go vet ./...
           go test ./...
+          go vet ./...
 
       - name: Apply C9.39
         shell: bash
