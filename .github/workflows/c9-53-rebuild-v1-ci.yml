@@ -1,0 +1,37 @@
+name: C9.53 Rebuild V1 Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Format
+        working-directory: v1_bridge
+        run: test -z "$(gofmt -l .)"
+      - name: Unit integration anti-regression
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+      - name: Race
+        working-directory: v1_bridge
+        run: go test -race -count=1 ./...
+      - name: Windows amd64 cross-build
+        working-directory: v1_bridge
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_C953.exe .
+          test -s /tmp/NEURA_C953.exe
+      - name: Truth note
+        run: echo 'Windows cross-build tested here; Windows native execution remains NOT TESTED.'
