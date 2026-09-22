@@ -31,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          gofmt -w v1_bridge
           test -z "$(gofmt -l v1_bridge)"
 
       - name: Vet
