@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-const version = "1.0.0-rc1"
+const version = "1.0.0-rc1-c9.53-rebuild"
 
 type Memory struct {
 	ID         string    `json:"id"`
