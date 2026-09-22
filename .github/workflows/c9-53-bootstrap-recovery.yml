@@ -111,11 +111,41 @@ jobs:
           except Exception as e:
               b64_error = f"{type(e).__name__}:{e}"
 
+          # Transport C: the longer historical core transport. Its final part is
+          # incomplete, but parts 00..09 form an exact Base64 quartet boundary.
+          # Decode only that verified prefix; never guess the missing tail byte.
+          core_parts = sorted((root / "bootstrap").glob("core.b64.part-*"))
+          core_prefix_parts = [p for p in core_parts if p.name <= "core.b64.part-09"]
+          core_b64 = b"".join(p.read_bytes() for p in core_prefix_parts)
+          core_b64 = b"".join(core_b64.split())
+          core_error = None
+          core_eof = False
+          core_tar = b""
+          core_complete, core_errors = {}, []
+          try:
+              if len(core_b64) % 4 != 0:
+                  raise ValueError(f"core prefix not quartet aligned: {len(core_b64)}")
+              core_raw = base64.b64decode(core_b64, validate=True)
+              cd = lzma.LZMADecompressor(format=lzma.FORMAT_AUTO)
+              core_tar = cd.decompress(core_raw)
+              core_eof = cd.eof
+              core_complete, core_errors = extract_complete_tar_members(core_tar, work / "core", "core-prefix")
+          except Exception as e:
+              core_error = f"{type(e).__name__}:{e}"
+
           # Compare independently recovered complete members. Never silently merge
           # conflicting versions of the same source file.
-          overlap = sorted(set(gz_complete) & set(xz_complete))
-          conflicts = [p for p in overlap if gz_complete[p]["sha256"] != xz_complete[p]["sha256"]]
-          union = sorted(set(gz_complete) | set(xz_complete))
+          maps = [("gzip", gz_complete), ("xz", xz_complete), ("core_prefix", core_complete)]
+          paths = sorted(set().union(*(set(m) for _, m in maps)))
+          conflicts = []
+          overlap_files = 0
+          for p in paths:
+              vals = [(name, m[p]["sha256"]) for name, m in maps if p in m]
+              if len(vals) > 1:
+                  overlap_files += 1
+              if len({h for _, h in vals}) > 1:
+                  conflicts.append({"path": p, "digests": vals})
+          union = paths
 
           report = {
               "gzip": {
@@ -134,7 +164,16 @@ jobs:
                   "complete_files": len(xz_complete),
                   "errors_tail": xz_errors[-8:],
               },
-              "overlap_files": len(overlap),
+              "core_prefix_transport": {
+                  "parts": [p.name for p in core_prefix_parts],
+                  "base64_chars": len(core_b64),
+                  "decode_error": core_error,
+                  "stream_eof": core_eof,
+                  "tar_bytes_recovered": len(core_tar),
+                  "complete_files": len(core_complete),
+                  "errors_tail": core_errors[-8:],
+              },
+              "overlap_files": overlap_files,
               "conflicts": conflicts[:50],
               "union_files": len(union),
           }
@@ -147,7 +186,7 @@ jobs:
           # but only after digest equality above.
           merged = work / "merged"
           merged.mkdir()
-          for srcdir in (work / "gz", work / "xz"):
+          for srcdir in (work / "gz", work / "xz", work / "core"):
               if not srcdir.exists():
                   continue
               for src in srcdir.rglob("*"):
