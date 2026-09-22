@@ -180,19 +180,75 @@ jobs:
 
               if best is not None:
                   _, ins_pos, ch, _ = best
-                  repaired = core_full_b64[:ins_pos] + bytes([ch]) + core_full_b64[ins_pos:]
-                  raw = base64.b64decode(repaired, validate=True)
-                  processed, core_tar, core_eof, err = decompress_xz_progress(raw, step=512)
+                  stage1 = core_full_b64[:ins_pos] + bytes([ch]) + core_full_b64[ins_pos:]
+                  raw1 = base64.b64decode(stage1, validate=True)
+                  processed1, tar1, eof1, err1 = decompress_xz_progress(raw1, step=512)
+
+                  repair_stage2 = None
+                  final_b64 = stage1
+                  processed, core_tar, core_eof, err = processed1, tar1, eof1, err1
+
+                  # If XZ now advances substantially farther, locate the next
+                  # corruption and test a single-character substitution around it.
+                  # Length remains unchanged and every surviving repair is later
+                  # checked against independently recovered file digests.
+                  if err1 is not None and processed1 > base_pos + 4096:
+                      center2 = (processed1 * 4) // 3
+                      lo2 = max(0, center2 - 1024)
+                      hi2 = min(len(stage1) - 1, center2 + 128)
+                      best2 = None
+                      for sub_pos in range(lo2, hi2 + 1):
+                          oldch = stage1[sub_pos]
+                          for ch2 in alphabet:
+                              if ch2 == oldch:
+                                  continue
+                              candidate = stage1[:sub_pos] + bytes([ch2]) + stage1[sub_pos+1:]
+                              sample = candidate[:120000]
+                              sample = sample[: (len(sample) // 4) * 4]
+                              try:
+                                  raw2s = base64.b64decode(sample, validate=True)
+                              except Exception:
+                                  continue
+                              p2, out2, eof2, e2 = decompress_xz_progress(raw2s, step=1024)
+                              score2 = (p2, len(out2))
+                              if best2 is None or score2 > best2[0]:
+                                  best2 = (score2, sub_pos, ch2, oldch, e2)
+                              if p2 == len(raw2s) and e2 is None:
+                                  best2 = (score2, sub_pos, ch2, oldch, e2)
+                                  break
+                          if best2 is not None and best2[0][0] >= min((120000 // 4) * 3, 90000):
+                              break
+
+                      if best2 is not None and best2[0][0] > processed1:
+                          _, sub_pos, ch2, oldch, _ = best2
+                          final_b64 = stage1[:sub_pos] + bytes([ch2]) + stage1[sub_pos+1:]
+                          raw2 = base64.b64decode(final_b64, validate=True)
+                          processed, core_tar, core_eof, err = decompress_xz_progress(raw2, step=512)
+                          repair_stage2 = {
+                              "sub_global_pos": sub_pos,
+                              "old_char": chr(oldch),
+                              "new_char": chr(ch2),
+                              "search_center": center2,
+                              "search_window": [lo2, hi2],
+                              "processed_compressed_bytes": processed,
+                              "decoded_bytes": len(raw2),
+                              "xz_eof": core_eof,
+                              "error": None if err is None else f"{err}:compressed_offset={processed}",
+                          }
+
                   core_error = None if err is None else f"{err}:compressed_offset={processed}"
                   core_repair = {
-                      "insert_global_pos": ins_pos,
-                      "insert_part": "core.b64.part-01",
-                      "insert_part_offset": ins_pos - p1_start,
-                      "insert_char": chr(ch),
-                      "search_center": center,
-                      "search_window": [lo, hi],
+                      "stage1_insert": {
+                          "insert_global_pos": ins_pos,
+                          "insert_part": "core.b64.part-01",
+                          "insert_part_offset": ins_pos - p1_start,
+                          "insert_char": chr(ch),
+                          "search_center": center,
+                          "search_window": [lo, hi],
+                          "processed_before_stage2": processed1,
+                      },
+                      "stage2_substitution": repair_stage2,
                       "processed_compressed_bytes": processed,
-                      "decoded_bytes": len(raw),
                       "xz_eof": core_eof,
                       "error": core_error,
                   }
