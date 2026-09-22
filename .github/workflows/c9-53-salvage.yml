@@ -1,0 +1,108 @@
+name: C9.53 Salvage Gate
+
+on:
+  push:
+    branches:
+      - validation/c9-53-salvage-20260922
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  salvage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Salvage C9.38 gzip snapshot
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -rf /tmp/c9-gz /tmp/c9-gz.tar
+          mkdir -p /tmp/c9-gz
+          set +e
+          gzip -dc bootstrap/c9_38_source.tar.gz > /tmp/c9-gz.tar
+          gzip_rc=$?
+          tar -xf /tmp/c9-gz.tar -C /tmp/c9-gz --ignore-zeros
+          tar_rc=$?
+          set -e
+          echo "gzip_rc=$gzip_rc tar_rc=$tar_rc"
+          find /tmp/c9-gz -type f | sort | tee /tmp/c9-gz-files.txt
+          echo "recovered_files=$(wc -l < /tmp/c9-gz-files.txt)"
+          test -f /tmp/c9-gz/capo_local/src/go.mod
+          rm -rf capo_local/src
+          cp -a /tmp/c9-gz/capo_local/src capo_local/src
+
+      - name: Validate salvaged C9.38 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd capo_local/src
+          gofmt -w .
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+
+      - name: Apply C9.39
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat bootstrap/c9_39_source_delta.part-* > /tmp/c9_39.patch
+          echo "29db6b6a48522dcb883391fa155ea92bb7c890507e4da34bd094d20a8aa7438a  /tmp/c9_39.patch" | sha256sum -c -
+          git apply --check /tmp/c9_39.patch
+          git apply /tmp/c9_39.patch
+
+      - name: Apply C9.51
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d bootstrap/c9_51_context_budget_core.patch.gz.b64 | gzip -dc > /tmp/c9_51.patch
+          git apply --check /tmp/c9_51.patch
+          git apply /tmp/c9_51.patch
+
+      - name: Apply C9.52
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d bootstrap/c9_52_release_integrity_source.patch.gz.b64 | gzip -dc > /tmp/c9_52.patch
+          git apply --check /tmp/c9_52.patch
+          git apply /tmp/c9_52.patch
+
+      - name: Overlay C9.53
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a capo_local/overlay_c9_53/. capo_local/src/
+          cd capo_local/src
+          gofmt -w .
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+
+      - name: Focused Memory Retrieval tests
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./... -run 'Memory|Retrieval|Embedding' -count=1
+
+      - name: Race gate
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race ./...
+
+      - name: Windows cross-build
+        working-directory: capo_local/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 go build ./...
