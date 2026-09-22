@@ -86,6 +86,13 @@ jobs:
           find capo_local/src -maxdepth 2 -type f | sort
           test -f capo_local/src/go.mod
 
+      - name: Inspect salvaged truncation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- autonomous_modules.go tail ---'
+          nl -ba capo_local/src/autonomous_modules.go | tail -n 140
+
       - name: Validate salvaged C9.38 baseline
         shell: bash
         run: |
