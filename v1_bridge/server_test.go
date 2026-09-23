@@ -45,7 +45,7 @@ func TestUnknownJSONFieldRejected(t *testing.T) {
 func TestStatusTruthfulWindowsUnavailable(t *testing.T) {
 	s := testServer(t); rr := doReq(t, s, "GET", "/windows/status", nil, "")
 	if rr.Code != 200 { t.Fatal(rr.Code) }
-	if !bytes.Contains(rr.Body.Bytes(), []byte("not_implemented_in_rc1")) { t.Fatalf("%s", rr.Body.String()) }
+	if !bytes.Contains(rr.Body.Bytes(), []byte("allowlisted_launch_v1")) { t.Fatalf("%s", rr.Body.String()) }
 }
 func TestStoreCorruptionFailsClosed(t *testing.T) {
 	dir := t.TempDir(); _ = os.MkdirAll(filepath.Join(dir, "data"), 0o700)
