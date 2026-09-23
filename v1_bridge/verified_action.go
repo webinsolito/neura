@@ -80,7 +80,7 @@ func (w *WorkspaceWriter) Write(path string, data []byte, passport CapabilityPas
 	if len(data) > maxWorkspaceWrite {
 		return WriteReceipt{}, errors.New("write exceeds 256 KiB limit")
 	}
-	if err := w.gate.Authorize(passport, capFSWrite, purpose); err != nil {
+	if err := w.gate.AuthorizeOnce(passport, capFSWrite, purpose); err != nil {
 		return WriteReceipt{}, fmt.Errorf("capability denied: %w", err)
 	}
 	target, err := w.resolve(path)
