@@ -16,6 +16,10 @@ const (
 	capSystemObserve  = "system.observe"
 	capFSList         = "fs.list"
 	capFSRead         = "fs.read"
+	capFSMkdir        = "fs.mkdir.workspace"
+	capFSMove         = "fs.move.workspace"
+	capFSDelete       = "fs.delete.workspace"
+	capFSRestore      = "fs.restore.workspace"
 	capWindowsObserve = "windows.observe"
 
 	maxPassportTTL = 5 * time.Minute
@@ -199,6 +203,14 @@ func capabilityForTool(name string) (string, bool) {
 		return capFSRead, true
 	case "fs.write.workspace":
 		return capFSWrite, true
+	case "fs.mkdir.workspace":
+		return capFSMkdir, true
+	case "fs.move.workspace":
+		return capFSMove, true
+	case "fs.delete.workspace":
+		return capFSDelete, true
+	case "fs.restore.workspace":
+		return capFSRestore, true
 	case "windows.processes":
 		return capWindowsObserve, true
 	default:
@@ -212,6 +224,10 @@ func capabilityCatalog() map[string]string {
 		"fs.list":           capFSList,
 		"fs.read":           capFSRead,
 		"fs.write.workspace": capFSWrite,
+		"fs.mkdir.workspace": capFSMkdir,
+		"fs.move.workspace": capFSMove,
+		"fs.delete.workspace": capFSDelete,
+		"fs.restore.workspace": capFSRestore,
 		"windows.processes": capWindowsObserve,
 	}
 }
