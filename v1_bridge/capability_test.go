@@ -131,6 +131,10 @@ func TestCapabilityCatalogHasExactKnownTools(t *testing.T) {
 		"fs.list":           capFSList,
 		"fs.read":           capFSRead,
 		"fs.write.workspace": capFSWrite,
+		"fs.mkdir.workspace": capFSMkdir,
+		"fs.move.workspace": capFSMove,
+		"fs.delete.workspace": capFSDelete,
+		"fs.restore.workspace": capFSRestore,
 		"windows.processes": capWindowsObserve,
 	}
 	if len(got) != len(want) {
