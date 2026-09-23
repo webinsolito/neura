@@ -1,0 +1,34 @@
+name: NEURA Flight Recorder Validation
+
+on:
+  push:
+    branches:
+      - 'candidate/failure-root-cause-flight-recorder-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flight-recorder-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Flight recorder tests
+        working-directory: v1_bridge
+        run: go test ./... -count=1
+
+  flight-recorder-windows-native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Flight recorder tests on Windows native runner
+        working-directory: v1_bridge
+        shell: pwsh
+        run: go test ./... -count=1
