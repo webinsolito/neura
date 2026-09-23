@@ -145,7 +145,7 @@ type limitedBuffer struct{b []byte;limit int;exceeded bool}
 func(l *limitedBuffer)Write(p []byte)(int,error){n:=len(p);remaining:=l.limit-len(l.b);if remaining<=0{l.exceeded=true;return n,nil};if n>remaining{l.b=append(l.b,p[:remaining]...);l.exceeded=true}else{l.b=append(l.b,p...)};return n,nil}
 
 type CommandResult struct{Goal string `json:"goal"`;Status string `json:"status"`;Plan *Plan `json:"plan,omitempty"`;Results []ToolResult `json:"results,omitempty"`;Memory []Memory `json:"memory,omitempty"`;Message string `json:"message,omitempty"`;ReceiptIDs []string `json:"receipt_ids,omitempty"`}
-type Core struct{store *Store;tools *ToolRegistry;model ModelAdapter;embedding LocalEmbeddingProvider}
+type Core struct{store *Store;tools *ToolRegistry;model ModelAdapter;embedding LocalEmbeddingProvider;recorder *FlightRecorder}
 func(c *Core)runTool(ctx context.Context,goal,subject,name string,input map[string]string)ToolResult{
 	if c==nil||c.tools==nil||c.tools.gate==nil{return ToolResult{Tool:name,Error:"capability gate unavailable"}}
 	required,ok:=capabilityForTool(name);if !ok{return ToolResult{Tool:name,Error:"tool not allowed"}}
@@ -153,7 +153,16 @@ func(c *Core)runTool(ctx context.Context,goal,subject,name string,input map[stri
 	return c.tools.Run(ctx,name,input,passport,goal)
 }
 func receiptID(action string,t time.Time)string{return idFor(action+t.UTC().Format(time.RFC3339Nano))}
-func(c *Core)receipt(goal,action,status,detail,errText string,start time.Time)string{r:=Receipt{ID:receiptID(action,start),Goal:goal,Action:action,Status:status,Detail:detail,Error:errText,StartedAt:start,FinishedAt:time.Now().UTC()};_=c.store.AddReceipt(r);return r.ID}
+func(c *Core)receipt(goal,action,status,detail,errText string,start time.Time)string{
+	r:=Receipt{ID:receiptID(action,start),Goal:goal,Action:action,Status:status,Detail:detail,Error:errText,StartedAt:start,FinishedAt:time.Now().UTC()}
+	_=c.store.AddReceipt(r)
+	if c.recorder!=nil {
+		var cause error
+		if strings.TrimSpace(errText)!="" { cause=errors.New(errText) }
+		_,_=c.recorder.Record("",goal,action,"receipt",status,cause)
+	}
+	return r.ID
+}
 func prefixValue(goal string,prefixes ...string)(string,bool){g:=strings.TrimSpace(goal);low:=strings.ToLower(g);for _,p:=range prefixes{if strings.HasPrefix(low,p){return strings.TrimSpace(g[len(p):]),true}};return "",false}
 func parseWriteGoal(goal string)(string,string,bool){g:=strings.TrimSpace(goal);low:=strings.ToLower(g);for _,p:=range []string{"scrivi file ","write file "}{if strings.HasPrefix(low,p){rest:=strings.TrimSpace(g[len(p):]);parts:=strings.SplitN(rest," :: ",2);if len(parts)!=2||strings.TrimSpace(parts[0])==""{return "","",false};return strings.TrimSpace(parts[0]),parts[1],true}};return "","",false}
 func(c *Core)Execute(ctx context.Context,goal string)CommandResult{
