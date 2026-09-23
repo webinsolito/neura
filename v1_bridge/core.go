@@ -24,12 +24,17 @@ import (
 const version = "1.0.0-rc2-capability-gate"
 
 type Memory struct {
-	ID         string    `json:"id"`
-	Text       string    `json:"text"`
-	Persistent bool      `json:"persistent"`
-	CreatedAt  time.Time `json:"created_at"`
-	Entities   []string  `json:"entities,omitempty"`
-	Embedding  []float32 `json:"embedding,omitempty"`
+	ID         string     `json:"id"`
+	Text       string     `json:"text"`
+	Persistent bool       `json:"persistent"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Entities   []string   `json:"entities,omitempty"`
+	Embedding  []float32  `json:"embedding,omitempty"`
+	Type       string     `json:"type,omitempty"`
+	Provenance string     `json:"provenance,omitempty"`
+	ValidFrom  time.Time  `json:"valid_from,omitempty"`
+	ValidUntil *time.Time `json:"valid_until,omitempty"`
+	Supersedes string     `json:"supersedes,omitempty"`
 }
 type Receipt struct {
 	ID string `json:"id"`
@@ -167,7 +172,7 @@ func prefixValue(goal string,prefixes ...string)(string,bool){g:=strings.TrimSpa
 func parseWriteGoal(goal string)(string,string,bool){g:=strings.TrimSpace(goal);low:=strings.ToLower(g);for _,p:=range []string{"scrivi file ","write file "}{if strings.HasPrefix(low,p){rest:=strings.TrimSpace(g[len(p):]);parts:=strings.SplitN(rest," :: ",2);if len(parts)!=2||strings.TrimSpace(parts[0])==""{return "","",false};return strings.TrimSpace(parts[0]),parts[1],true}};return "","",false}
 func(c *Core)Execute(ctx context.Context,goal string)CommandResult{
 	goal=strings.TrimSpace(goal);res:=CommandResult{Goal:goal};if goal==""{res.Status="blocked";res.Message="empty goal";return res};if len([]byte(goal))>64*1024{res.Status="blocked";res.Message="goal too large";return res}
-	if v,ok:=prefixValue(goal,"ricorda ","remember ");ok{st:=time.Now().UTC();m,created,err:=c.store.SaveMemoryWithEmbedding(ctx,v,c.embedding);if err!=nil{res.Status="error";res.Message=err.Error();res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","error","",err.Error(),st)};return res};res.Status="ok";res.Memory=[]Memory{m};if created{res.Message="memory saved"}else{res.Message="duplicate memory already present"};res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","verified",res.Message,"",st)};return res}
+	if v,ok:=prefixValue(goal,"ricorda ","remember ");ok{st:=time.Now().UTC();m,created,err:=c.store.SaveGovernedMemory(ctx,v,MemoryWriteMeta{Type:"fact",Provenance:"user-direct"},c.embedding);if err!=nil{res.Status="error";res.Message=err.Error();res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","error","",err.Error(),st)};return res};res.Status="ok";res.Memory=[]Memory{m};if created{res.Message="memory saved"}else{res.Message="duplicate memory already present"};res.ReceiptIDs=[]string{c.receipt(goal,"memory.save","verified",res.Message,"",st)};return res}
 	if v,ok:=prefixValue(goal,"cerca memoria ","search memory ","ricorda su ");ok{st:=time.Now().UTC();res.Memory=c.store.SearchMemoryHybrid(ctx,v,10,c.embedding);res.Status="ok";res.Message=fmt.Sprintf("%d memories found",len(res.Memory));res.ReceiptIDs=[]string{c.receipt(goal,"memory.search","verified",res.Message,"",st)};return res}
 	low:=strings.ToLower(goal);if low=="stato"||low=="status"||low=="stato sistema"{st:=time.Now().UTC();tr:=c.runTool(ctx,goal,"core-direct","system.info",nil);res.Status="ok";res.Results=[]ToolResult{tr};res.ReceiptIDs=[]string{c.receipt(goal,"system.info","verified","system info returned","",st)};return res}
 	if v,ok:=prefixValue(goal,"lista file ","list files ");ok{st:=time.Now().UTC();tr:=c.runTool(ctx,goal,"core-direct","fs.list",map[string]string{"path":v});res.Results=[]ToolResult{tr};if tr.Error!=""{res.Status="blocked";res.Message=tr.Error;res.ReceiptIDs=[]string{c.receipt(goal,"fs.list","blocked","",tr.Error,st)}}else{res.Status="ok";res.Message="directory listed";res.ReceiptIDs=[]string{c.receipt(goal,"fs.list","verified",res.Message,"",st)}};return res}
