@@ -136,6 +136,7 @@ func TestCapabilityCatalogHasExactKnownTools(t *testing.T) {
 		"fs.delete.workspace": capFSDelete,
 		"fs.restore.workspace": capFSRestore,
 		"windows.processes": capWindowsObserve,
+		"windows.app.launch": capWindowsLaunch,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("unexpected catalog size: %#v", got)
