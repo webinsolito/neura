@@ -85,7 +85,11 @@ func TestVerifiedWriteExpiredPassport(t *testing.T) {
 func TestVerifiedWriteTamperedPassport(t *testing.T) {
 	w, g, _ := writerFixture(t)
 	p := writePassport(t, g, "edit", capFSWrite)
-	p.Signature = "00" + p.Signature[2:]
+	if p.Signature[0] == '0' {
+		p.Signature = "1" + p.Signature[1:]
+	} else {
+		p.Signature = "0" + p.Signature[1:]
+	}
 	if _, err := w.Write("x.txt", []byte("x"), p, "edit"); err == nil {
 		t.Fatal("expected tamper denial")
 	}
