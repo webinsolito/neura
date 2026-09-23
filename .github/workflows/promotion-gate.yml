@@ -1,0 +1,79 @@
+name: NEURA Promotion Gate
+
+on:
+  push:
+    branches:
+      - main
+      - 'candidate/promotion-known-good-gate-*'
+  pull_request:
+    branches:
+      - main
+      - stable
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  policy-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promotion policy unit tests
+        working-directory: .github/scripts
+        run: python test_promotion_gate.py
+
+  full-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: v1_bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Unit and integration tests
+        run: go test ./... -count=1
+      - name: Vet
+        run: go vet ./...
+      - name: Race detector
+        if: runner.os == 'Linux'
+        run: go test -race ./... -count=1
+      - name: Verified action anti-regression
+        run: go test ./... -run 'VerifiedWrite|CoreDirectVerifiedWorkspaceWrite|CapabilityToolRegistryVerifiedWorkspaceWrite' -count=1
+
+  promotion-policy:
+    if: github.event_name == 'pull_request'
+    needs: [policy-unit, full-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify transition, rollback and prior evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python .github/scripts/promotion_gate.py \
+            --repo "${{ github.repository }}" \
+            --source-ref "${{ github.head_ref }}" \
+            --target-ref "${{ github.base_ref }}" \
+            --source-sha "${{ github.event.pull_request.head.sha }}" \
+            --target-sha "${{ github.event.pull_request.base.sha }}" \
+            --token "$GH_TOKEN"
+
+  main-known-good-evidence:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [policy-unit, full-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record exact main SHA validation
+        run: |
+          echo "## NEURA known-good main evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Linux + Windows native gate: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow run is the evidence required before main -> stable." >> "$GITHUB_STEP_SUMMARY"
