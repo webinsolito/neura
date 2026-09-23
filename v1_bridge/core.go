@@ -110,7 +110,7 @@ type ToolResult struct{Tool string `json:"tool"`;Verified bool `json:"verified"`
 func NewToolRegistry(root string)(*ToolRegistry,error){abs,err:=filepath.Abs(root);if err!=nil{return nil,err};real,err:=filepath.EvalSymlinks(abs);if err==nil{abs=real};gate,err:=NewCapabilityGate();if err!=nil{return nil,err};writer,err:=NewWorkspaceWriter(abs,gate);if err!=nil{return nil,err};return &ToolRegistry{workspace:abs,gate:gate,writer:writer},nil}
 func (r *ToolRegistry)resolve(user string)(string,error){if user==""{user="."};var p string;if filepath.IsAbs(user){p=filepath.Clean(user)}else{p=filepath.Join(r.workspace,user)};abs,err:=filepath.Abs(p);if err!=nil{return "",err};real,err:=filepath.EvalSymlinks(abs);if err==nil{abs=real};rel,err:=filepath.Rel(r.workspace,abs);if err!=nil{return "",err};if rel==".."||strings.HasPrefix(rel,".."+string(os.PathSeparator)){return "",errors.New("path escapes workspace")};return abs,nil}
 func sensitivePath(path string)bool{name:=strings.ToLower(filepath.Base(path));if name==".env"||name==".env.local"||name=="credentials"||name=="credentials.json"||name=="secrets.json"||name=="id_rsa"||name=="id_ed25519"{return true};ext:=strings.ToLower(filepath.Ext(name));return ext==".pem"||ext==".key"||ext==".p12"||ext==".pfx"}
-func (r *ToolRegistry)List()[]string{out:=[]string{"system.info","fs.list","fs.read","fs.write.workspace"};if runtime.GOOS=="windows"{out=append(out,"windows.processes")};return out}
+func (r *ToolRegistry)List()[]string{out:=[]string{"system.info","fs.list","fs.read","fs.write.workspace","fs.mkdir.workspace","fs.move.workspace","fs.delete.workspace","fs.restore.workspace"};if runtime.GOOS=="windows"{out=append(out,"windows.processes")};return out}
 func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]string,passport CapabilityPassport,purpose string)ToolResult{
 	required,ok:=capabilityForTool(name);if !ok{return ToolResult{Tool:name,Error:"tool not allowed"}}
 	if r.gate==nil{return ToolResult{Tool:name,Error:"capability gate unavailable"}}
@@ -125,6 +125,14 @@ func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]strin
 		p,err:=r.resolve(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if sensitivePath(p){return ToolResult{Tool:name,Error:"sensitive file blocked by secret firewall"}};f,err:=os.Open(p);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};defer f.Close();b,err:=io.ReadAll(io.LimitReader(f,256*1024+1));if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};if len(b)>256*1024{return ToolResult{Tool:name,Error:"file exceeds 256 KiB read limit"}};return ToolResult{Tool:name,Verified:true,Data:string(b)}
 	case "fs.write.workspace":
 		if r.writer==nil{return ToolResult{Tool:name,Error:"workspace writer unavailable"}};wr,err:=r.writer.Write(input["path"],[]byte(input["content"]),passport,purpose);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};return ToolResult{Tool:name,Verified:wr.Verified,Data:wr}
+	case "fs.mkdir.workspace":
+		rec,err:=r.mkdirWorkspace(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};return ToolResult{Tool:name,Verified:rec.Verified,Data:rec}
+	case "fs.move.workspace":
+		rec,err:=r.moveWorkspace(input["from"],input["to"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};return ToolResult{Tool:name,Verified:rec.Verified,Data:rec}
+	case "fs.delete.workspace":
+		rec,err:=r.quarantineDelete(input["path"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};return ToolResult{Tool:name,Verified:rec.Verified,Data:rec}
+	case "fs.restore.workspace":
+		rec,err:=r.restoreDeleted(input["quarantine"],input["original"]);if err!=nil{return ToolResult{Tool:name,Error:err.Error()}};return ToolResult{Tool:name,Verified:rec.Verified,Data:rec}
 	default:return ToolResult{Tool:name,Error:"tool not allowed"}
 	}
 }
