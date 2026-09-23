@@ -1,0 +1,34 @@
+name: NEURA Multi-Step Autonomy Validation
+
+on:
+  push:
+    branches:
+      - 'candidate/multistep-autonomy-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  task-runner-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Persistent multi-step task tests
+        working-directory: v1_bridge
+        run: go test ./... -count=1
+
+  task-runner-windows-native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Persistent multi-step task tests on Windows native
+        working-directory: v1_bridge
+        shell: pwsh
+        run: go test ./... -count=1
