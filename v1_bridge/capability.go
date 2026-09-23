@@ -21,6 +21,7 @@ const (
 	capFSDelete       = "fs.delete.workspace"
 	capFSRestore      = "fs.restore.workspace"
 	capWindowsObserve = "windows.observe"
+	capWindowsLaunch  = "windows.app.launch"
 
 	maxPassportTTL = 5 * time.Minute
 	clockSkew      = 5 * time.Second
@@ -213,6 +214,8 @@ func capabilityForTool(name string) (string, bool) {
 		return capFSRestore, true
 	case "windows.processes":
 		return capWindowsObserve, true
+	case "windows.app.launch":
+		return capWindowsLaunch, true
 	default:
 		return "", false
 	}
@@ -229,5 +232,6 @@ func capabilityCatalog() map[string]string {
 		"fs.delete.workspace": capFSDelete,
 		"fs.restore.workspace": capFSRestore,
 		"windows.processes": capWindowsObserve,
+		"windows.app.launch": capWindowsLaunch,
 	}
 }
