@@ -35,7 +35,7 @@ func TestFlightRecorderDoesNotStoreRawGoal(t *testing.T) {
 func TestFlightRecorderCausalParentAndStableOrdering(t *testing.T) {
 	r, _ := NewFlightRecorder(t.TempDir())
 	now := time.Date(2026, 9, 23, 21, 0, 0, 0, time.UTC)
-	r.now = func() time.Time { now }
+	r.now = func() time.Time { return now }
 	first, err := r.Record("", "goal", "plan", "plan", "ok", nil)
 	if err != nil { t.Fatal(err) }
 	now = now.Add(time.Second)
