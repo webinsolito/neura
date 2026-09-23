@@ -125,3 +125,57 @@ func TestRollbackNewFileRemovesIt(t *testing.T) {
 		t.Fatalf("expected removal, got %v", err)
 	}
 }
+
+func TestVerifiedWriteRecoversFromInterruptedTemp(t *testing.T) {
+	w, g, root := writerFixture(t)
+	target := filepath.Join(root, "recover.txt")
+	if err := os.WriteFile(target, []byte("before"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target+".neura.tmp", []byte("partial-from-interrupted-write"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePassport(t, g, "recover", capFSWrite)
+	r, err := w.Write("recover.txt", []byte("after"), p, "recover")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "after" {
+		t.Fatalf("unexpected content %q", b)
+	}
+	if _, err := os.Stat(target + ".neura.tmp"); !os.IsNotExist(err) {
+		t.Fatalf("stale temp survived verified write: %v", err)
+	}
+	if err := w.Rollback(r); err != nil {
+		t.Fatal(err)
+	}
+	b, err = os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "before" {
+		t.Fatalf("rollback got %q", b)
+	}
+}
+func TestRollbackRejectsTamperedBackup(t *testing.T) {
+	w, g, root := writerFixture(t)
+	target := filepath.Join(root, "tamper.txt")
+	if err := os.WriteFile(target, []byte("before"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePassport(t, g, "tamper", capFSWrite)
+	r, err := w.Write("tamper.txt", []byte("after"), p, "tamper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.BackupPath, []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Rollback(r); err == nil || !strings.Contains(err.Error(), "backup integrity mismatch") {
+		t.Fatalf("expected backup integrity failure, got %v", err)
+	}
+}

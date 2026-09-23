@@ -152,6 +152,12 @@ func (w *WorkspaceWriter) Rollback(r WriteReceipt) error {
 		if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+			if err == nil {
+				return errors.New("rollback verification failed: new file still exists")
+			}
+			return fmt.Errorf("rollback verification failed: %w", err)
+		}
 		return nil
 	}
 	backup, err := w.resolve(r.BackupPath)
@@ -165,5 +171,15 @@ func (w *WorkspaceWriter) Rollback(r WriteReceipt) error {
 	if r.BeforeSHA256 != "" && digestBytes(b) != r.BeforeSHA256 {
 		return errors.New("backup integrity mismatch")
 	}
-	return writeAtomic(target, b)
+	if err := writeAtomic(target, b); err != nil {
+		return err
+	}
+	restored, err := os.ReadFile(target)
+	if err != nil {
+		return fmt.Errorf("rollback verification read failed: %w", err)
+	}
+	if r.BeforeSHA256 != "" && digestBytes(restored) != r.BeforeSHA256 {
+		return errors.New("rollback verification failed: restored digest mismatch")
+	}
+	return nil
 }
