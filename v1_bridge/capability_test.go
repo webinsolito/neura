@@ -130,6 +130,7 @@ func TestCapabilityCatalogHasExactKnownTools(t *testing.T) {
 		"system.info":       capSystemObserve,
 		"fs.list":           capFSList,
 		"fs.read":           capFSRead,
+		"fs.write.workspace": capFSWrite,
 		"windows.processes": capWindowsObserve,
 	}
 	if len(got) != len(want) {
@@ -140,4 +141,12 @@ func TestCapabilityCatalogHasExactKnownTools(t *testing.T) {
 			t.Fatalf("tool %s capability=%q want=%q", tool, got[tool], cap)
 		}
 	}
+}
+
+func TestCapabilityToolRegistryVerifiedWorkspaceWrite(t *testing.T) {
+	_, _, tools := testCore(t)
+	p, err := tools.gate.Issue("test", "write", []string{capFSWrite}, time.Minute)
+	if err != nil { t.Fatal(err) }
+	r := tools.Run(context.Background(), "fs.write.workspace", map[string]string{"path":"tool.txt","content":"ok"}, p, "write")
+	if r.Error != "" || !r.Verified { t.Fatalf("%+v", r) }
 }

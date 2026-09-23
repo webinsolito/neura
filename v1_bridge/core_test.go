@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -85,4 +86,19 @@ func TestWindowsProcessesFailsExplicitlyOffWindows(t *testing.T) {
 	if runtime.GOOS=="windows" { t.Skip("non-Windows negative test") }
 	c,_,_:=testCore(t);r:=c.Execute(context.Background(),"processi windows")
 	if r.Status!="unavailable" { t.Fatalf("%+v",r) }
+}
+
+func TestCoreDirectVerifiedWorkspaceWrite(t *testing.T) {
+	c, s, tools := testCore(t)
+	r := c.Execute(context.Background(), "scrivi file notes.txt :: hello verified")
+	if r.Status != "ok" || len(r.Results) != 1 || !r.Results[0].Verified { t.Fatalf("%+v", r) }
+	b, err := os.ReadFile(filepath.Join(tools.workspace, "notes.txt")); if err != nil { t.Fatal(err) }
+	if string(b) != "hello verified" { t.Fatalf("unexpected content %q", b) }
+	if _, n := s.Counts(); n != 1 { t.Fatalf("receipt count=%d", n) }
+	if got := s.RecentReceipts(1); len(got) != 1 || got[0].Action != "fs.write.workspace" || got[0].Status != "verified" { t.Fatalf("%+v", got) }
+}
+func TestCoreDirectWorkspaceWriteBlocksSensitivePath(t *testing.T) {
+	c, _, _ := testCore(t)
+	r := c.Execute(context.Background(), "scrivi file .env :: TOKEN=secret")
+	if r.Status != "blocked" || len(r.Results) != 1 || !strings.Contains(r.Results[0].Error, "secret firewall") { t.Fatalf("%+v", r) }
 }

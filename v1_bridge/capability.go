@@ -197,6 +197,8 @@ func capabilityForTool(name string) (string, bool) {
 		return capFSList, true
 	case "fs.read":
 		return capFSRead, true
+	case "fs.write.workspace":
+		return capFSWrite, true
 	case "windows.processes":
 		return capWindowsObserve, true
 	default:
@@ -209,6 +211,7 @@ func capabilityCatalog() map[string]string {
 		"system.info":       capSystemObserve,
 		"fs.list":           capFSList,
 		"fs.read":           capFSRead,
+		"fs.write.workspace": capFSWrite,
 		"windows.processes": capWindowsObserve,
 	}
 }

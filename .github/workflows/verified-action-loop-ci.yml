@@ -1,0 +1,43 @@
+name: NEURA Verified Action Loop Validation
+on:
+  push:
+    branches:
+      - 'candidate/verified-action-loop-workspace-write-*'
+  pull_request:
+    paths:
+      - 'v1_bridge/verified_action.go'
+      - 'v1_bridge/verified_action_test.go'
+      - '.github/workflows/verified-action-loop-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: v1_bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Format gate
+        if: runner.os == 'Linux'
+        shell: bash
+        run: test -z "$(gofmt -l verified_action.go verified_action_test.go)"
+      - name: Unit and integration tests
+        run: go test ./... -count=1
+      - name: Vet
+        run: go vet ./...
+      - name: Race detector
+        if: runner.os == 'Linux'
+        run: go test -race ./... -count=1
+      - name: Verified action focused tests
+        run: go test ./... -run VerifiedWrite -count=1
