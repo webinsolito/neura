@@ -1,0 +1,48 @@
+name: Bootstrap C9.38 source
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: neura-bootstrap-source
+  cancel-in-progress: false
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: candidate/autonomy
+          fetch-depth: 0
+
+      - name: Restore and verify C9.38 core source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d capo_local/src ]; then
+            echo "C9.38 source tree is already expanded."
+            exit 0
+          fi
+
+          archive="bootstrap/c9_38_source.tar.gz"
+          test -f "$archive"
+          echo "d3e07f347c6e4026b8792f1d8a4c121368bb92833125658946812898b576f87c  $archive" | sha256sum -c -
+          tar -xzf "$archive"
+
+          test -d capo_local/src
+          test -f capo_local/src/go.mod
+
+      - name: Commit expanded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'NEURA Bootstrap'
+          git config user.email 'neura-bootstrap@users.noreply.github.com'
+          git add capo_local/src
+          if git diff --cached --quiet; then
+            echo 'No bootstrap changes.'
+            exit 0
+          fi
+          git commit -m 'bootstrap: expand verified C9.38 core source tree'
+          git push origin HEAD:candidate/autonomy

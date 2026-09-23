@@ -1,0 +1,17 @@
+# Runtime / secrets
+.env
+.env.*
+*.key
+*.pem
+capo_data/
+runtime/live/
+
+# Generated binaries and release bundles
+*.exe
+*.zip
+*.tar.gz
+!bootstrap/c9_38_source.tar.gz
+
+# Local build output
+.neura/
+bin/

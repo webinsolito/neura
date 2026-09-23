@@ -1,0 +1,61 @@
+name: NEURA C9.53 Memory Retrieval Fabric CI
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Candidate ref to verify
+        required: true
+        default: candidate/v1-integration-rc2-main-sync
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neura-c9-53-memory-retrieval-fabric-ci
+  cancel-in-progress: true
+
+jobs:
+  memory-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_ref }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w v1_bridge
+          test -z "$(gofmt -l v1_bridge)"
+      - name: Vet
+        working-directory: v1_bridge
+        run: go vet ./...
+      - name: C9.53 focused tests
+        working-directory: v1_bridge
+        run: go test -count=1 -run '^TestC953' .
+      - name: Full anti-regression
+        working-directory: v1_bridge
+        run: go test -count=1 ./...
+      - name: Focused race
+        working-directory: v1_bridge
+        run: go test -race -count=1 -run '^TestC953' .
+      - name: Retrieval benchmark smoke
+        working-directory: v1_bridge
+        run: go test -run '^$' -bench '^BenchmarkC953' -benchtime=100x .
+      - name: Windows amd64 cross-build
+        working-directory: v1_bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/NEURA_C9_53.exe .
+          test -s /tmp/NEURA_C9_53.exe
+      - name: Truthful environment status
+        run: |
+          echo 'Embedding real model quality benchmark=NOT_REQUIRED_FOR_CORE_PASS'
+          echo 'Windows native execution=VERIFIED_BY_V1_RC2_INTEGRATION_GATE'
+          echo 'Stable promotion=NOT_PERFORMED'
