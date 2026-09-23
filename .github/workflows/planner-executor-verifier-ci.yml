@@ -1,0 +1,34 @@
+name: NEURA Planner Executor Verifier Validation
+
+on:
+  push:
+    branches:
+      - 'candidate/planner-executor-verifier-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pev-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Planner executor verifier tests
+        working-directory: v1_bridge
+        run: go test ./... -count=1
+
+  pev-windows-native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Planner executor verifier tests on Windows native runner
+        working-directory: v1_bridge
+        shell: pwsh
+        run: go test ./... -count=1
