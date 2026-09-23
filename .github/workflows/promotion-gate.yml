@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - stable
       - 'candidate/promotion-known-good-gate-*'
   pull_request:
     branches:
@@ -66,14 +67,19 @@ jobs:
             --target-sha "${{ github.event.pull_request.base.sha }}" \
             --token "$GH_TOKEN"
 
-  main-known-good-evidence:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  known-good-evidence:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable')
     needs: [policy-unit, full-test]
     runs-on: ubuntu-latest
     steps:
-      - name: Record exact main SHA validation
+      - name: Record exact branch SHA validation
         run: |
-          echo "## NEURA known-good main evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "## NEURA known-good evidence" >> "$GITHUB_STEP_SUMMARY"
+          echo "Branch: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Linux + Windows native gate: PASS" >> "$GITHUB_STEP_SUMMARY"
-          echo "This workflow run is the evidence required before main -> stable." >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.ref_name }}" = "stable" ]; then
+            echo "Stable exact post-promotion SHA certified." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Main exact SHA is eligible as the source for main -> stable promotion." >> "$GITHUB_STEP_SUMMARY"
+          fi
