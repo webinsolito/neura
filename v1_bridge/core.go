@@ -114,7 +114,9 @@ func (r *ToolRegistry)List()[]string{out:=[]string{"system.info","fs.list","fs.r
 func (r *ToolRegistry)Run(ctx context.Context,name string,input map[string]string,passport CapabilityPassport,purpose string)ToolResult{
 	required,ok:=capabilityForTool(name);if !ok{return ToolResult{Tool:name,Error:"tool not allowed"}}
 	if r.gate==nil{return ToolResult{Tool:name,Error:"capability gate unavailable"}}
-	if err:=r.gate.Authorize(passport,required,purpose);err!=nil{return ToolResult{Tool:name,Error:"capability denied: "+err.Error()}}
+	var authErr error
+	if name=="fs.write.workspace" { authErr=r.gate.Authorize(passport,required,purpose) } else if isMutatingTool(name) { authErr=r.gate.AuthorizeOnce(passport,required,purpose) } else { authErr=r.gate.Authorize(passport,required,purpose) }
+	if authErr!=nil{return ToolResult{Tool:name,Error:"capability denied: "+authErr.Error()}}
 	switch name{
 	case "system.info":return ToolResult{Tool:name,Verified:true,Data:map[string]any{"os":runtime.GOOS,"arch":runtime.GOARCH,"go":runtime.Version(),"workspace":r.workspace}}
 	case "fs.list":
