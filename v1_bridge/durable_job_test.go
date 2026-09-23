@@ -1,4 +1,4 @@
-package v1bridge
+package main
 
 import (
     "errors"
