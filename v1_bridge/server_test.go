@@ -14,7 +14,8 @@ import (
 
 func testServer(t *testing.T) *Server {
 	t.Helper(); c, s, tools := testCore(t)
-	return &Server{core: c, store: s, tools: tools, allowedOrigin: "https://webinsolito.github.io"}
+	tasks, err := NewTaskRunner(c, tools.workspace); if err != nil { t.Fatal(err) }
+	return &Server{core: c, store: s, tools: tools, allowedOrigin: "https://webinsolito.github.io", tasks: tasks}
 }
 func doReq(t *testing.T, s *Server, method, path string, body any, origin string) *httptest.ResponseRecorder {
 	t.Helper(); var b bytes.Buffer
