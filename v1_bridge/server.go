@@ -46,6 +46,7 @@ func(s *Server)routes()http.Handler{mux:=http.NewServeMux()
 	mux.HandleFunc("GET /tools",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"tools":s.tools.List(),"mutating_tools":[]string{"fs.write.workspace","fs.mkdir.workspace","fs.move.workspace","fs.delete.workspace","fs.restore.workspace"},"destructive_tools":[]string{"fs.delete.workspace"},"delete_mode":"quarantine_recoverable"})})
 	mux.HandleFunc("GET /capabilities",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"gate":"active","passport":"hmac-sha256","max_ttl_seconds":int(maxPassportTTL/time.Second),"tool_capabilities":capabilityCatalog()})})
 	mux.HandleFunc("GET /recovery/status",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,s.recovery)})
+	mux.HandleFunc("GET /resources",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"runtime":CaptureResources(),"model":s.model.RuntimeProfile(),"measurement_scope":"this NEURA process on this machine"})})
 	mux.HandleFunc("POST /tasks",func(w http.ResponseWriter,r *http.Request){
 		if s.tasks==nil{writeJSON(w,503,map[string]string{"error":"task runner unavailable"});return}
 		var req struct{ID string `json:"id"`;Goal string `json:"goal"`;Plan Plan `json:"plan"`}
