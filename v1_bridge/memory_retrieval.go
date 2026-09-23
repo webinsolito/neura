@@ -420,6 +420,7 @@ func (s *Store) SearchMemoryHybrid(ctx context.Context, q string, limit int, p L
 	cp := append([]Memory(nil), s.memories...)
 	s.mu.Unlock()
 	query := BuildMemoryQuery(ctx, p, q, limit)
+	cp = filterGovernedMemories(cp, query.Now)
 	scored := RetrieveMemory(cp, query, DefaultRetrievalWeights())
 	out := make([]Memory, len(scored))
 	for i, x := range scored {
