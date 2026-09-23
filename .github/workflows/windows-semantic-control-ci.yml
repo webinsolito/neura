@@ -1,0 +1,34 @@
+name: NEURA Windows Semantic Control Validation
+
+on:
+  push:
+    branches:
+      - 'candidate/windows-semantic-control-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-semantic-linux-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Non-Windows regression and sandbox tests
+        working-directory: v1_bridge
+        run: go test ./... -count=1
+
+  windows-semantic-native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Windows semantic launch and verification
+        working-directory: v1_bridge
+        shell: pwsh
+        run: go test ./... -count=1
