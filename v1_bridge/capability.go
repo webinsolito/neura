@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -38,8 +39,10 @@ type CapabilityPassport struct {
 }
 
 type CapabilityGate struct {
-	key []byte
-	now func() time.Time
+	key  []byte
+	now  func() time.Time
+	mu   sync.Mutex
+	used map[string]time.Time
 }
 
 func NewCapabilityGate() (*CapabilityGate, error) {
@@ -47,7 +50,7 @@ func NewCapabilityGate() (*CapabilityGate, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("capability gate key generation failed: %w", err)
 	}
-	return &CapabilityGate{key: key, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &CapabilityGate{key:key,now:func() time.Time{return time.Now().UTC()},used:map[string]time.Time{}},nil
 }
 
 func newCapabilityGateForTest(key []byte, now func() time.Time) (*CapabilityGate, error) {
@@ -58,7 +61,7 @@ func newCapabilityGateForTest(key []byte, now func() time.Time) (*CapabilityGate
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &CapabilityGate{key: cp, now: now}, nil
+	return &CapabilityGate{key:cp,now:now,used:map[string]time.Time{}},nil
 }
 
 func normalizeCapabilities(in []string) ([]string, error) {
@@ -234,4 +237,17 @@ func capabilityCatalog() map[string]string {
 		"windows.processes": capWindowsObserve,
 		"windows.app.launch": capWindowsLaunch,
 	}
+}
+
+
+func (g *CapabilityGate) AuthorizeOnce(p CapabilityPassport, required, purpose string) error {
+	if err:=g.Authorize(p,required,purpose);err!=nil{return err}
+	now:=g.now().UTC()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.used==nil{g.used=map[string]time.Time{}}
+	for id,exp:=range g.used{if !exp.After(now){delete(g.used,id)}}
+	if _,exists:=g.used[p.ID];exists{return errors.New("capability passport replay denied")}
+	g.used[p.ID]=p.ExpiresAt
+	return nil
 }
