@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-type Server struct{core *Core;store *Store;tools *ToolRegistry;model ModelAdapter;allowedOrigin string;recovery RecoveryReport}
+type Server struct{core *Core;store *Store;tools *ToolRegistry;model ModelAdapter;allowedOrigin string;recovery RecoveryReport;tasks *TaskRunner}
 func writeJSON(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);_=json.NewEncoder(w).Encode(v)}
 func decodeJSON(w http.ResponseWriter,r *http.Request,dst any)error{r.Body=http.MaxBytesReader(w,r.Body,64*1024);dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields();if err:=dec.Decode(dst);err!=nil{return err};var extra any;err:=dec.Decode(&extra);if errors.Is(err,io.EOF){return nil};if err==nil{return errors.New("multiple json values")};return fmt.Errorf("trailing json rejected: %w",err)}
 func(s *Server)middleware(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
@@ -46,6 +46,28 @@ func(s *Server)routes()http.Handler{mux:=http.NewServeMux()
 	mux.HandleFunc("GET /tools",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"tools":s.tools.List(),"mutating_tools":[]string{"fs.write.workspace","fs.mkdir.workspace","fs.move.workspace","fs.delete.workspace","fs.restore.workspace"},"destructive_tools":[]string{"fs.delete.workspace"},"delete_mode":"quarantine_recoverable"})})
 	mux.HandleFunc("GET /capabilities",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"gate":"active","passport":"hmac-sha256","max_ttl_seconds":int(maxPassportTTL/time.Second),"tool_capabilities":capabilityCatalog()})})
 	mux.HandleFunc("GET /recovery/status",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,s.recovery)})
+	mux.HandleFunc("POST /tasks",func(w http.ResponseWriter,r *http.Request){
+		if s.tasks==nil{writeJSON(w,503,map[string]string{"error":"task runner unavailable"});return}
+		var req struct{ID string `json:"id"`;Goal string `json:"goal"`;Plan Plan `json:"plan"`}
+		if err:=decodeJSON(w,r,&req);err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return}
+		task,err:=s.tasks.store.Create(req.ID,req.Goal,req.Plan,s.tools.List());if err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return}
+		writeJSON(w,201,task)
+	})
+	mux.HandleFunc("GET /tasks/{id}",func(w http.ResponseWriter,r *http.Request){
+		if s.tasks==nil{writeJSON(w,503,map[string]string{"error":"task runner unavailable"});return}
+		task,ok:=s.tasks.store.Get(r.PathValue("id"));if !ok{writeJSON(w,404,map[string]string{"error":"task not found"});return};writeJSON(w,200,task)
+	})
+	mux.HandleFunc("POST /tasks/{id}/next",func(w http.ResponseWriter,r *http.Request){
+		if s.tasks==nil{writeJSON(w,503,map[string]string{"error":"task runner unavailable"});return}
+		var req struct{Generation uint64 `json:"generation"`};if err:=decodeJSON(w,r,&req);err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return}
+		ctx,cancel:=context.WithTimeout(r.Context(),65*time.Second);defer cancel()
+		task,res,err:=s.tasks.RunNext(ctx,r.PathValue("id"),req.Generation);if err!=nil{writeJSON(w,409,map[string]string{"error":err.Error()});return};writeJSON(w,200,map[string]any{"task":task,"result":res})
+	})
+	mux.HandleFunc("POST /tasks/{id}/resolve",func(w http.ResponseWriter,r *http.Request){
+		if s.tasks==nil{writeJSON(w,503,map[string]string{"error":"task runner unavailable"});return}
+		var req struct{Generation uint64 `json:"generation"`;EffectVerified bool `json:"effect_verified"`};if err:=decodeJSON(w,r,&req);err!=nil{writeJSON(w,400,map[string]string{"error":err.Error()});return}
+		task,err:=s.tasks.store.ResolveManualReview(r.PathValue("id"),req.Generation,req.EffectVerified);if err!=nil{writeJSON(w,409,map[string]string{"error":err.Error()});return};writeJSON(w,200,task)
+	})
 	mux.HandleFunc("GET /windows/status",func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"available":runtime.GOOS=="windows","observe":map[bool]string{true:"available",false:"not_on_windows"}[runtime.GOOS=="windows"],"understand":"deterministic_v1","preflight":"fixed_app_allowlist_and_signed_capability","action":"allowlisted_launch_v1","allowed_apps":[]string{"notepad"},"verify":"pid_postcondition","pipeline":[]string{"observe","understand","preflight","action","verify"}})})
 	return s.middleware(mux)
 }
@@ -53,7 +75,7 @@ func defaultDataDir()string{d,err:=os.UserConfigDir();if err!=nil{return filepat
 func main(){
 	listen:=flag.String("listen","127.0.0.1:8765","loopback listen address");data:=flag.String("data",defaultDataDir(),"persistent data directory");workspace:=flag.String("workspace",".","allowed filesystem workspace");modelExec:=flag.String("model-exec","","optional absolute path to local model planner executable");ollamaModel:=flag.String("ollama-model","","optional local Ollama model name");ollamaURL:=flag.String("ollama-url","http://127.0.0.1:11434","loopback Ollama URL");embeddingExec:=flag.String("embedding-exec","","optional absolute path to local embedding executable");flag.Parse()
 	if !strings.HasPrefix(*listen,"127.0.0.1:")&&!strings.HasPrefix(*listen,"[::1]:"){log.Fatal("listen address must be loopback")}
-	recoveryMgr,err:=NewRecoveryManager(*workspace);if err!=nil{log.Fatal(err)};recoveryReport,err:=recoveryMgr.Recover();if err!=nil{log.Fatal(err)};store,err:=NewStore(*data);if err!=nil{log.Fatal(err)};tools,err:=NewToolRegistry(*workspace);if err!=nil{log.Fatal(err)};recorder,err:=NewFlightRecorder(*data);if err!=nil{log.Fatal(err)};model:=ModelAdapter{Executable:*modelExec,Timeout:20*time.Second,OllamaURL:*ollamaURL,OllamaModel:*ollamaModel};var embedding LocalEmbeddingProvider;if *embeddingExec!=""{p:=CommandEmbeddingProvider{Executable:*embeddingExec,Timeout:8*time.Second};if !p.Available(){log.Fatal("embedding executable must be an existing absolute file")};embedding=p};core:=&Core{store:store,tools:tools,model:model,embedding:embedding,recorder:recorder};srv:=&Server{core:core,store:store,tools:tools,model:model,allowedOrigin:"https://webinsolito.github.io",recovery:recoveryReport}
+	recoveryMgr,err:=NewRecoveryManager(*workspace);if err!=nil{log.Fatal(err)};recoveryReport,err:=recoveryMgr.Recover();if err!=nil{log.Fatal(err)};store,err:=NewStore(*data);if err!=nil{log.Fatal(err)};tools,err:=NewToolRegistry(*workspace);if err!=nil{log.Fatal(err)};recorder,err:=NewFlightRecorder(*data);if err!=nil{log.Fatal(err)};model:=ModelAdapter{Executable:*modelExec,Timeout:20*time.Second,OllamaURL:*ollamaURL,OllamaModel:*ollamaModel};var embedding LocalEmbeddingProvider;if *embeddingExec!=""{p:=CommandEmbeddingProvider{Executable:*embeddingExec,Timeout:8*time.Second};if !p.Available(){log.Fatal("embedding executable must be an existing absolute file")};embedding=p};core:=&Core{store:store,tools:tools,model:model,embedding:embedding,recorder:recorder};tasks,err:=NewTaskRunner(core,*workspace);if err!=nil{log.Fatal(err)};if err:=tasks.store.RecoverInterrupted();err!=nil{log.Fatal(err)};srv:=&Server{core:core,store:store,tools:tools,model:model,allowedOrigin:"https://webinsolito.github.io",recovery:recoveryReport,tasks:tasks}
 	httpSrv:=&http.Server{Addr:*listen,Handler:srv.routes(),ReadHeaderTimeout:5*time.Second,ReadTimeout:70*time.Second,WriteTimeout:70*time.Second,IdleTimeout:90*time.Second,MaxHeaderBytes:32*1024}
 	fmt.Printf("NEURA V1 bridge %s listening on http://%s\n",version,*listen);log.Fatal(httpSrv.ListenAndServe())
 }
