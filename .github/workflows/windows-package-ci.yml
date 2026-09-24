@@ -3,6 +3,7 @@ name: NEURA Windows Package
 on:
   push:
     branches:
+      - main
       - 'candidate/v1-packaging-*'
     paths:
       - 'v1_bridge/**'
