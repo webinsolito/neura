@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestEntityStateLifecycle(t *testing.T) {
@@ -50,5 +51,45 @@ func TestEntityStateConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	if !validEntityMode(s.Snapshot().Mode) {
 		t.Fatal("invalid final state")
+	}
+}
+
+func TestEntityStateSubscriptionGetsInitialAndLatestWithoutBlocking(t *testing.T) {
+	s := NewEntityStateStore()
+	updates, cancel := s.Subscribe()
+	defer cancel()
+
+	select {
+	case got := <-updates:
+		if got.Mode != EntityIdle {
+			t.Fatalf("initial subscription mode=%q", got.Mode)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("initial subscription snapshot timed out")
+	}
+
+	// Deliberately do not consume while publishing. Set must remain non-blocking
+	// and the bounded stream should collapse stale animation states to the latest.
+	s.Set(EntityListening, "listening")
+	s.Set(EntityThinking, "planning")
+	s.Set(EntityWorking, "executing")
+
+	select {
+	case got := <-updates:
+		if got.Mode != EntityWorking || got.Detail != "executing" {
+			t.Fatalf("latest subscription snapshot=%+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("latest subscription snapshot timed out")
+	}
+}
+
+func TestEntityStateSubscriptionCancelIsIdempotent(t *testing.T) {
+	s := NewEntityStateStore()
+	updates, cancel := s.Subscribe()
+	cancel()
+	cancel()
+	if _, ok := <-updates; ok {
+		t.Fatal("subscription channel must be closed after cancel")
 	}
 }
