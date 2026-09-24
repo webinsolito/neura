@@ -6,6 +6,7 @@ on:
       - main
       - stable
       - 'candidate/promotion-known-good-gate-*'
+      - 'candidate/release-hardening-*'
   pull_request:
     branches:
       - main
@@ -48,6 +49,17 @@ jobs:
         run: go test -race ./... -count=1
       - name: Verified action anti-regression
         run: go test ./... -run 'VerifiedWrite|CoreDirectVerifiedWorkspaceWrite|CapabilityToolRegistryVerifiedWorkspaceWrite' -count=1
+      - name: Build NEURA executable
+        run: go build -o neura-ci${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/neura
+      - name: Startup smoke test
+        shell: bash
+        run: |
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            ./neura-ci.exe --help > startup-smoke.txt 2>&1
+          else
+            ./neura-ci --help > startup-smoke.txt 2>&1
+          fi
+          test -s startup-smoke.txt
 
   promotion-policy:
     if: github.event_name == 'pull_request'
@@ -78,6 +90,7 @@ jobs:
           echo "Branch: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Linux + Windows native gate: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Executable build + startup smoke: PASS" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ github.ref_name }}" = "stable" ]; then
             echo "Stable exact post-promotion SHA certified." >> "$GITHUB_STEP_SUMMARY"
           else
