@@ -52,7 +52,8 @@ func (s *EntityStateStore) Snapshot() EntitySnapshot {
 
 // Subscribe returns a bounded stream suitable for a UI renderer. Delivery is
 // deliberately latest-value/non-blocking: a slow animation must never stall the
-// agent. The cancel function is idempotent and closes the subscriber channel.
+// agent. The cancel function is idempotent, discards any stale buffered frame,
+// and closes the subscriber channel so consumers can terminate immediately.
 func (s *EntityStateStore) Subscribe() (<-chan EntitySnapshot, func()) {
 	s.mu.Lock()
 	id := s.nextID
@@ -68,6 +69,12 @@ func (s *EntityStateStore) Subscribe() (<-chan EntitySnapshot, func()) {
 			s.mu.Lock()
 			if owned, ok := s.subscribers[id]; ok {
 				delete(s.subscribers, id)
+				// A buffered snapshot must not survive cancellation: callers use a
+				// closed channel as the definitive signal that rendering can stop.
+				select {
+				case <-owned:
+				default:
+				}
 				close(owned)
 			}
 			s.mu.Unlock()
