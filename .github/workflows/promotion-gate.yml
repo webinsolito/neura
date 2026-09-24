@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - stable
-      - 'candidate/promotion-known-good-gate-*'
+      - 'candidate/**'
   pull_request:
     branches:
       - main
