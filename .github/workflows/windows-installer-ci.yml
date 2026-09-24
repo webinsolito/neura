@@ -1,0 +1,51 @@
+name: NEURA Windows Installer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/build-windows.ps1'
+      - 'scripts/install-windows.ps1'
+      - 'v1_bridge/**'
+      - '.github/workflows/windows-installer-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: v1_bridge/go.mod
+      - name: Build
+        shell: powershell
+        run: .\scripts\build-windows.ps1
+      - name: Install without Start Menu mutation
+        shell: powershell
+        run: .\scripts\install-windows.ps1 -NoBuild -NoShortcut -InstallDir "$env:RUNNER_TEMP\NEURA"
+      - name: Verify installed executable starts and becomes healthy
+        shell: powershell
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'NEURA\neura.exe'
+          if (-not (Test-Path $exe)) { throw 'installed executable missing' }
+          $data = Join-Path $env:RUNNER_TEMP 'neura-data'
+          $workspace = Join-Path $env:RUNNER_TEMP 'neura-workspace'
+          New-Item -ItemType Directory -Force -Path $workspace | Out-Null
+          $p = Start-Process -FilePath $exe -ArgumentList '-data', $data, '-workspace', $workspace -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/health' -TimeoutSec 2
+                if ($health.ok -eq $true) { $ok = $true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw 'installed NEURA did not become healthy' }
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
