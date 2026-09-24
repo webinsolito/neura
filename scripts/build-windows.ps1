@@ -16,7 +16,7 @@ try {
     $env:CGO_ENABLED = '0'
     $env:GOOS = 'windows'
     $env:GOARCH = 'amd64'
-    go build -trimpath -ldflags '-s -w' -o (Join-Path $DistDir 'neura.exe') ./cmd/neura
+    go build -trimpath -ldflags '-s -w' -o (Join-Path $DistDir 'neura.exe') .
 } finally {
     Pop-Location
 }
