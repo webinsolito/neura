@@ -1,11 +1,10 @@
-$ErrorActionPreference = 'Stop'
-
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'NEURA'),
     [switch]$NoBuild,
     [switch]$NoShortcut
 )
 
+$ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $DistExe = Join-Path $RepoRoot 'dist\neura.exe'
 
