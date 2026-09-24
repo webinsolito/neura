@@ -1,0 +1,56 @@
+name: NEURA Windows Package
+
+on:
+  push:
+    branches:
+      - 'candidate/v1-packaging-*'
+    paths:
+      - 'v1_bridge/**'
+      - 'scripts/build-windows.ps1'
+      - 'scripts/run-windows.ps1'
+      - '.github/workflows/windows-package-ci.yml'
+  pull_request:
+    paths:
+      - 'v1_bridge/**'
+      - 'scripts/build-windows.ps1'
+      - 'scripts/run-windows.ps1'
+      - '.github/workflows/windows-package-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: v1_bridge/go.mod
+          cache-dependency-path: v1_bridge/go.mod
+      - name: Build verified Windows package
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Smoke start and health check
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath ./dist/neura.exe -ArgumentList '-listen','127.0.0.1:8765','-workspace','.' -PassThru
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/health' -TimeoutSec 2
+                if ($health.ok -eq $true) { $ok = $true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw 'NEURA health endpoint did not become ready' }
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neura-windows-amd64
+          path: dist/neura.exe
+          if-no-files-found: error
