@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -63,4 +64,21 @@ func TestTaskStoreRejectsSecretBearingPersistentPlan(t *testing.T) {
 	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace)
 	_,err:=runner.store.Create("t5","secret",Plan{Steps:[]PlanStep{{Tool:"fs.write.workspace",Input:map[string]string{"path":"a.txt","content":"api_key=abcdef1234567890"}}}},tools.List())
 	if err==nil{t.Fatal("secret-bearing plan persisted")}
+}
+
+func TestTaskStoreRejectsInvalidCreationBoundaries(t *testing.T){
+	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace);one:=Plan{Steps:[]PlanStep{{Tool:"system.info",Input:map[string]string{}}}}
+	cases:=[]struct{name,id,goal string;plan Plan}{
+		{"unsafe id","../escape","goal",one},
+		{"long id",strings.Repeat("a",maxTaskIDChars+1),"goal",one},
+		{"empty goal","safe-id","   ",one},
+		{"long goal","safe-id",strings.Repeat("x",maxCommandRunes+1),one},
+		{"empty plan","safe-id","goal",Plan{}},
+	}
+	many:=Plan{Steps:make([]PlanStep,maxTaskSteps+1)};for i:=range many.Steps{many.Steps[i]=PlanStep{Tool:"system.info",Input:map[string]string{}}};cases=append(cases,struct{name,id,goal string;plan Plan}{"too many steps","safe-id","goal",many})
+	for _,tc:=range cases{t.Run(tc.name,func(t *testing.T){if _,err:=runner.store.Create(tc.id,tc.goal,tc.plan,tools.List());err==nil{t.Fatal("invalid durable task accepted")}})}
+}
+
+func TestTaskStoreNormalizesSafeCreationInput(t *testing.T){
+	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace);task,err:=runner.store.Create("  task.safe-1  ","  inspect system  ",Plan{Steps:[]PlanStep{{Tool:"system.info",Input:map[string]string{}}}},tools.List());if err!=nil{t.Fatal(err)};if task.ID!="task.safe-1"{t.Fatalf("id=%q",task.ID)}
 }
