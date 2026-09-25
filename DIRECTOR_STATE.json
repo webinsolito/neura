@@ -1,37 +1,36 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-25T09:40:00+02:00",
-  "current_branch": "candidate/ui-shell-3d-20260925-0838",
-  "candidate": "candidate/ui-shell-3d-20260925-0838",
-  "last_good_commit": "23ff3a4ce020f45d83c828f787fb23a411db6aec",
+  "updated_at": "2026-09-25T12:38:50+02:00",
+  "current_branch": "candidate/release-state-final-20260925",
+  "candidate": "candidate/release-state-final-20260925",
+  "last_good_commit": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
   "rollback_branch": "rollback/pre-ui-shell-20260925-0838",
   "rollback_commit": "d02a896e977d2252be1472e7ef99aefb32dff5b6",
-  "current_gate": "N_release_candidate_validation",
-  "completion_score": 97,
-  "verification_score": 97,
+  "current_gate": "N_release_verified",
+  "completion_score": 100,
+  "verification_score": 100,
   "scoring": {
     "locked": true,
     "rule": "Fixed 100-point completion gates. Completion points increase only for implemented+verified work; verification is tracked separately.",
     "gate_weights": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3},
-    "completion_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0},
-    "verification_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0}
+    "completion_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3},
+    "verification_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3}
   },
   "last_tests": [
-    {"name":"NEURA V1 RC2 Pull Request Validation","run_id":36103932337,"result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
-    {"name":"NEURA Promotion Gate","run_id":36103932325,"result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
-    {"name":"windows-native","result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
-    {"name":"linux","result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"}
+    {"name":"NEURA Promotion Gate main","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
+    {"name":"full-test ubuntu-latest","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
+    {"name":"full-test windows-latest","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
+    {"name":"policy-unit","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
+    {"name":"verified-action anti-regression","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
+    {"name":"race detector linux","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"}
   ],
   "benchmark_baseline": {"reasoning_learning_v1":{"head_sha":"3cdf01cefaf65c430319910f4afbede50e3c782d","task_completion":"2/2","verified_tool_selection_execution":"1/1","governed_learning":"PASS","rollback_ready_required":true,"auto_promotion":false,"external_paid_service_required":false}},
-  "blockers": [
-    "Final release-candidate verification/promotion remains before N_release can receive its 3 points.",
-    "GitHub branch protection is disabled for main/stable; protection remains procedural."
-  ],
+  "blockers": ["GitHub branch protection is disabled for main/stable; protection remains procedural."],
   "implemented_this_run": [
-    "Validated the exact UI/3D candidate head across RC2 Linux/Windows and Promotion Gate.",
-    "Closed H UI and I Graphics completion/verification gates based on executed CI evidence.",
-    "Advanced the persisted project state to final N release-candidate validation."
+    "Verified the promoted main SHA with the complete Promotion Gate on Linux and Windows.",
+    "Verified unit/integration, vet, Linux race detector, policy unit and verified-action anti-regression on main.",
+    "Closed N Release using the fixed persisted scoring model and recorded final release evidence."
   ],
-  "pull_request": 25,
-  "next_action": "Validate the exact state-updated candidate head; if all RC2 and Promotion checks pass, fast-forward main to that exact verified SHA, close PR #25, then run/verify main and award N_release only if final release evidence is green."
+  "release": {"status":"NEURA V1 — RELEASE CANDIDATE VERIFIED","verified_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4","promotion_gate_run_id":36119854282},
+  "next_action": "Release state complete. Freeze new V1 features; only respond to newly discovered reproducible bugs or explicit V1.1 requirements."
 }
