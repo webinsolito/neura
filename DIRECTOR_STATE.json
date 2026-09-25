@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T17:20:00+02:00",
-  "current_branch": "candidate/windows-package-ux-20260925-1710",
-  "candidate": "candidate/windows-package-ux-20260925-1710",
-  "last_good_commit": "d4145b544858b396bdfaa7dc011d2eb6eff3738e",
-  "rollback_branch": "rollback/pre-windows-package-ux-20260925-1710",
-  "rollback_commit": "d4145b544858b396bdfaa7dc011d2eb6eff3738e",
-  "current_gate": "POST_V1_WINDOWS_PACKAGING_EXACT_HEAD_VALIDATION",
+  "updated_at": "2026-09-25T17:22:00+02:00",
+  "current_branch": "main",
+  "candidate": "",
+  "last_good_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
+  "rollback_branch": "rollback/pre-premium-ux-handoff-20260925-1722",
+  "rollback_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
+  "current_gate": "POST_V1_PREMIUM_UX_COMMAND_LIFECYCLE",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,22 +49,23 @@
   },
   "last_tests": [
     {
-      "name": "Windows package user-ready slice",
-      "run_id": 36153160913,
+      "name": "Windows packaging exact-head RC2",
+      "run_id": 36153405702,
       "result": "PASS",
-      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
+      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
     },
     {
-      "name": "Windows package exact-head RC2",
-      "run_id": 36153160886,
+      "name": "Windows packaging exact-head Windows Package",
+      "run_id": 36153405662,
       "result": "PASS",
-      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
+      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
     },
     {
-      "name": "Windows package exact-head Promotion Gate",
-      "run_id": 36153160870,
+      "name": "Windows packaging exact-head Promotion Gate",
+      "run_id": 36153405654,
+      "attempt": 2,
       "result": "PASS",
-      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
+      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
     }
   ],
   "benchmark_baseline": {
@@ -135,8 +136,7 @@
     }
   },
   "blockers": [
-    "GitHub branch protection is disabled for main/stable; protection remains procedural.",
-    "Final state commit must pass exact-head RC2/Promotion before packaging slice promotion."
+    "GitHub branch protection is disabled for main/stable; protection remains procedural."
   ],
   "implemented_this_run": [
     "DEBT PREVIOUS: memory hardening and its state handoff were already promoted; resumed exact next_action Windows packaging.",
@@ -151,5 +151,5 @@
     "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
     "promotion_gate_run_id": 36119854282
   },
-  "next_action": "Validate the exact final Windows-packaging HEAD including DIRECTOR_STATE; fix any FAIL on this candidate, otherwise fast-forward the exact green SHA to main, then implement one premium UX command-lifecycle slice with clear thinking/working/result/error states, activity context and mobile/browser visual verification."
+  "next_action": "Create a rollback and candidate from main, then implement one premium UX command-lifecycle slice: make thinking/working/success/error states explicit, show current activity and useful result/error context without developer clutter, improve mobile responsiveness, and verify the full local command flow plus browser-visible UI behavior before promotion."
 }
