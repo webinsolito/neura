@@ -157,6 +157,7 @@ func (s *Store) SaveGovernedMemory(ctx context.Context, text string, meta Memory
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := validateMemoryGraph(s.memories); err != nil { return Memory{}, false, fmt.Errorf("memory store invalid: %w", err) }
 	if meta.Supersedes == m.ID && meta.Supersedes != "" {
 		return Memory{}, false, errors.New("memory cannot supersede itself")
 	}
@@ -184,14 +185,12 @@ func (s *Store) SaveGovernedMemory(ctx context.Context, text string, meta Memory
 			return x, false, nil
 		}
 	}
+	next := append(append([]Memory(nil), s.memories...), m)
+	if err := validateMemoryGraph(next); err != nil { return Memory{}, false, err }
 	if err := appendJSONL(filepath.Join(s.dir, "memory.jsonl"), m); err != nil {
 		return Memory{}, false, err
 	}
-	s.memories = append(s.memories, m)
-	if err := validateMemoryGraph(s.memories); err != nil {
-		s.memories = s.memories[:len(s.memories)-1]
-		return Memory{}, false, err
-	}
+	s.memories = next
 	return m, true, nil
 }
 
