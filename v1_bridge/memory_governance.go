@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -69,6 +70,56 @@ func normalizeMemoryMeta(meta MemoryWriteMeta, now time.Time) (MemoryWriteMeta, 
 	return meta, nil
 }
 
+func validateMemoryGraph(docs []Memory) error {
+	byID := map[string]Memory{}
+	successor := map[string]string{}
+	for _, m := range docs {
+		if strings.TrimSpace(m.ID) == "" { return errors.New("memory graph contains empty id") }
+		if _, exists := byID[m.ID]; exists { return fmt.Errorf("memory graph duplicate id %s", m.ID) }
+		byID[m.ID] = m
+	}
+	for _, m := range docs {
+		if m.Supersedes == "" { continue }
+		if m.Supersedes == m.ID { return fmt.Errorf("memory graph self-supersession %s", m.ID) }
+		parent, ok := byID[m.Supersedes]
+		if !ok { return fmt.Errorf("memory graph missing predecessor %s", m.Supersedes) }
+		if parent.Type != "" && m.Type != "" && parent.Type != m.Type { return fmt.Errorf("memory graph type mismatch %s -> %s", parent.Type, m.Type) }
+		if prior, ok := successor[m.Supersedes]; ok && prior != m.ID { return fmt.Errorf("memory graph conflict: %s has successors %s and %s", m.Supersedes, prior, m.ID) }
+		successor[m.Supersedes] = m.ID
+	}
+	for id := range byID {
+		seen := map[string]bool{}
+		cur := id
+		for cur != "" {
+			if seen[cur] { return fmt.Errorf("memory graph cycle at %s", cur) }
+			seen[cur] = true
+			m := byID[cur]
+			cur = m.Supersedes
+		}
+	}
+	return nil
+}
+
+func (s *Store) MemoryLineage(id string) ([]Memory, error) {
+	id = strings.TrimSpace(id)
+	if id == "" { return nil, errors.New("memory id required") }
+	s.mu.Lock()
+	cp := append([]Memory(nil), s.memories...)
+	s.mu.Unlock()
+	if err := validateMemoryGraph(cp); err != nil { return nil, err }
+	byID := map[string]Memory{}
+	for _, m := range cp { byID[m.ID] = m }
+	cur, ok := byID[id]
+	if !ok { return nil, errors.New("memory not found") }
+	out := []Memory{}
+	for {
+		out = append(out, cur)
+		if cur.Supersedes == "" { break }
+		cur = byID[cur.Supersedes]
+	}
+	return out, nil
+}
+
 func (s *Store) SaveGovernedMemory(ctx context.Context, text string, meta MemoryWriteMeta, p LocalEmbeddingProvider) (Memory, bool, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -106,27 +157,41 @@ func (s *Store) SaveGovernedMemory(ctx context.Context, text string, meta Memory
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, x := range s.memories {
-		if x.ID == m.ID {
-			return x, false, nil
-		}
+	if meta.Supersedes == m.ID && meta.Supersedes != "" {
+		return Memory{}, false, errors.New("memory cannot supersede itself")
 	}
 	if meta.Supersedes != "" {
+		var parent Memory
 		found := false
 		for _, old := range s.memories {
-			if old.ID == meta.Supersedes {
-				found = true
-				break
+			if old.ID == meta.Supersedes { parent = old; found = true; break }
+		}
+		if !found { return Memory{}, false, errors.New("superseded memory not found") }
+		if parent.Type != "" && parent.Type != meta.Type {
+			return Memory{}, false, errors.New("superseded memory type mismatch")
+		}
+		for _, existing := range s.memories {
+			if existing.Supersedes == meta.Supersedes && existing.ID != m.ID {
+				return Memory{}, false, fmt.Errorf("memory conflict: predecessor already superseded by %s", existing.ID)
 			}
 		}
-		if !found {
-			return Memory{}, false, errors.New("superseded memory not found")
+	}
+	for _, x := range s.memories {
+		if x.ID == m.ID {
+			if x.Supersedes != m.Supersedes || (x.Type != "" && x.Type != m.Type) {
+				return Memory{}, false, errors.New("duplicate memory metadata conflict")
+			}
+			return x, false, nil
 		}
 	}
 	if err := appendJSONL(filepath.Join(s.dir, "memory.jsonl"), m); err != nil {
 		return Memory{}, false, err
 	}
 	s.memories = append(s.memories, m)
+	if err := validateMemoryGraph(s.memories); err != nil {
+		s.memories = s.memories[:len(s.memories)-1]
+		return Memory{}, false, err
+	}
 	return m, true, nil
 }
 
