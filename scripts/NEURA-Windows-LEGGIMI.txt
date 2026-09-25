@@ -1,0 +1,14 @@
+NEURA — AVVIO WINDOWS
+
+1. Estrai completamente la cartella NEURA-Windows.
+2. Fai doppio clic su Launch-NEURA.cmd.
+3. NEURA controlla automaticamente pacchetto, cartelle, porta locale e avvio.
+4. Quando è pronta apre l'interfaccia locale nel browser.
+
+Non serve installare Go e non serve un servizio cloud a pagamento.
+
+Dati: %LOCALAPPDATA%\NEURA\data
+Log: %LOCALAPPDATA%\NEURA\logs
+Workspace predefinito: Documenti\NEURA Workspace
+
+Se l'avvio fallisce, il launcher mostra un messaggio concreto e salva il dettaglio in launcher.log.
