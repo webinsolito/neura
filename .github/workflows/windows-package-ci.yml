@@ -75,9 +75,11 @@ jobs:
           Move-Item -LiteralPath $exe -Destination $hidden
           try {
             $launcher = Join-Path $package 'Start-NEURA.ps1'
-            $out = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $launcher -PreflightOnly -NoBrowser 2>&1 | Out-String
-            $code = $LASTEXITCODE
-            if($code -eq 0){ throw 'Broken package unexpectedly passed preflight' }
+            $stdout = Join-Path $env:RUNNER_TEMP 'neura-negative.stdout.txt'
+            $stderr = Join-Path $env:RUNNER_TEMP 'neura-negative.stderr.txt'
+            $proc = Start-Process -FilePath powershell.exe -ArgumentList @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$launcher,'-PreflightOnly','-NoBrowser') -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $out = ((Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) + [Environment]::NewLine + (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue))
+            if($proc.ExitCode -eq 0){ throw 'Broken package unexpectedly passed preflight' }
             if($out -notmatch 'neura\.exe non trovato'){ throw "Actionable missing-exe message absent: $out" }
           } finally {
             Move-Item -LiteralPath $hidden -Destination $exe -Force
