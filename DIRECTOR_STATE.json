@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T16:49:00+02:00",
-  "current_branch": "candidate/task-recovery-20260925-1642",
-  "candidate": "candidate/task-recovery-20260925-1642",
-  "last_good_commit": "90164c8749cff230fe16cd766bf506534b198405",
-  "rollback_branch": "rollback/pre-task-recovery-20260925-1642",
-  "rollback_commit": "90164c8749cff230fe16cd766bf506534b198405",
-  "current_gate": "POST_V1_DURABLE_TASK_RECOVERY_EXACT_HEAD_VALIDATION",
+  "updated_at": "2026-09-25T16:58:00+02:00",
+  "current_branch": "candidate/memory-hardening-20260925-1652",
+  "candidate": "candidate/memory-hardening-20260925-1652",
+  "last_good_commit": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
+  "rollback_branch": "rollback/pre-memory-hardening-20260925-1652",
+  "rollback_commit": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
+  "current_gate": "POST_V1_MEMORY_LINEAGE_RESTART_RECALL_EXACT_HEAD_VALIDATION",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,29 +49,29 @@
   },
   "last_tests": [
     {
-      "name": "prior command+task boundary Promotion Gate",
-      "run_id": 36148943695,
+      "name": "prior durable-task recovery Promotion Gate",
+      "run_id": 36150031444,
       "attempt": 2,
       "result": "PASS",
-      "head_sha": "90164c8749cff230fe16cd766bf506534b198405"
+      "head_sha": "bd1148a6f4f84c4364f9875b964c04fe779e0268"
     },
     {
-      "name": "durable task recovery RC2",
-      "run_id": 36149807226,
+      "name": "memory hardening RC2",
+      "run_id": 36150828498,
       "result": "PASS",
-      "head_sha": "77245b5d2028552c50e266b0a16b376c4d7348d3"
+      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
     },
     {
-      "name": "durable task recovery Promotion Gate",
-      "run_id": 36149807145,
+      "name": "memory hardening Promotion Gate",
+      "run_id": 36150828564,
       "result": "PASS",
-      "head_sha": "77245b5d2028552c50e266b0a16b376c4d7348d3"
+      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
     },
     {
-      "name": "durable task recovery Windows Package",
-      "run_id": 36149807174,
-      "result": "ALL_JOB_STEPS_PASS_WRAPPER_PENDING",
-      "head_sha": "77245b5d2028552c50e266b0a16b376c4d7348d3"
+      "name": "memory hardening Windows Package",
+      "run_id": 36150828507,
+      "result": "PASS",
+      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
     }
   ],
   "benchmark_baseline": {
@@ -99,6 +99,24 @@
         "http_list_and_retry_flow": "PASS",
         "recovery_ui_wiring": "PASS"
       }
+    },
+    "post_v1_memory_hardening": {
+      "baseline_sha": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
+      "benchmark": "BenchmarkC953Retrieve500",
+      "iterations": 100,
+      "before_ns_per_op": 688277,
+      "candidate_sha": "53a617e0d15091ade118612a67bf32817251d23e",
+      "after_ns_per_op": 359286,
+      "interpretation": "No retrieval performance regression observed; CI runner variance means the lower value is not attributed solely to this change.",
+      "capability_checks": {
+        "fork_conflict_rejected": "PASS",
+        "cross_type_supersession_rejected": "PASS",
+        "active_truth_after_restart": "PASS",
+        "lineage_history_after_restart": "PASS",
+        "persisted_fork_fails_closed": "PASS",
+        "http_current_truth_history": "PASS",
+        "ui_memory_recall_history_wiring": "PASS"
+      }
     }
   },
   "blockers": [
@@ -106,16 +124,17 @@
     "Final exact HEAD including updated DIRECTOR_STATE.json requires RC2/Promotion/Windows validation before promotion."
   ],
   "implemented_this_run": [
-    "DEBT CLOSED: promoted prior command+task boundary hardening only after Promotion Gate attempt 2 passed on exact SHA 90164c8.",
-    "PASS 1 runtime: added durable-task List, safe RetryBlocked for read-only failures, recovery counters, generation fencing, and manual-review transition for unverified mutating failures.",
-    "PASS 1 API: added GET /tasks and POST /tasks/{id}/retry while preserving existing resolve semantics and capability/tool validation.",
-    "PASS 2 E2E: added store and HTTP recovery tests proving repair->retry->success and mutating failure->manual review without blind retry.",
-    "PASS 2 UX: added premium Recovery Task panel to local NEURA UI with recent task state/progress, safe retry, manual-review actions, confirmations and entity feedback."
+    "DEBT CLOSED: exact durable-task recovery HEAD bd1148a passed RC2, Windows Package and Promotion Gate attempt 2 and was fast-forwarded to main.",
+    "PASS 1 memory runtime: enforced linear supersession lineage, rejected forked/cross-type/self supersession conflicts before persistence, and validated the complete memory graph fail-closed on restart.",
+    "PASS 1 persistence/retrieval: added durable MemoryLineage history while keeping hybrid retrieval current-truth-only after supersession and restart.",
+    "PASS 2 API: added GET /memory/history, explicit HTTP conflict status and truthful memory governance status.",
+    "PASS 2 UX: added premium Memoria Attiva search/current-truth panel and lineage-history inspection to the local NEURA shell.",
+    "Regression/benchmark: new restart/conflict/API/UI tests passed; BenchmarkC953Retrieve500 measured 688277 -> 359286 ns/op on CI with no observed performance regression."
   ],
   "release": {
     "status": "NEURA V1 — RELEASE CANDIDATE VERIFIED",
     "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
     "promotion_gate_run_id": 36119854282
   },
-  "next_action": "Validate the exact final HEAD containing durable-task recovery runtime, UI, tests and state; fix any FAIL on this candidate, otherwise fast-forward the exact green SHA to main, then start a memory persistence+retrieval conflict/restart hardening package."
+  "next_action": "Validate the exact final memory-hardening HEAD including state; fix any FAIL on this candidate, otherwise fast-forward the exact green SHA to main, then start a Windows packaging package with launcher, dependency/preflight checks and user-facing startup error UX."
 }
