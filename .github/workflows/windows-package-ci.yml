@@ -60,8 +60,10 @@ jobs:
           $package = Join-Path $PWD 'dist\NEURA-Windows'
           $workspace = Join-Path $env:RUNNER_TEMP 'neura-package-workspace'
           $data = Join-Path $env:RUNNER_TEMP 'neura-package-data'
-          $out = & (Join-Path $package 'Start-NEURA.ps1') -PreflightOnly -NoBrowser -Workspace $workspace -DataDir $data 2>&1 | Out-String
-          if($LASTEXITCODE -ne 0){ throw "Preflight failed: $out" }
+          $launcher = Join-Path $package 'Start-NEURA.ps1'
+          $out = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $launcher -PreflightOnly -NoBrowser -Workspace $workspace -DataDir $data 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          if($code -ne 0){ throw "Preflight failed with exit $code: $out" }
           if($out -notmatch 'NEURA_PREFLIGHT_OK'){ throw "Preflight success marker missing: $out" }
 
       - name: Missing executable gives actionable error
@@ -87,8 +89,10 @@ jobs:
           $package = Join-Path $PWD 'dist\NEURA-Windows'
           $workspace = Join-Path $env:RUNNER_TEMP 'neura-smoke-workspace'
           $data = Join-Path $env:RUNNER_TEMP 'neura-smoke-data'
-          $out = & (Join-Path $package 'Start-NEURA.ps1') -SmokeTest -NoBrowser -Listen '127.0.0.1:8765' -Workspace $workspace -DataDir $data 2>&1 | Out-String
-          if($LASTEXITCODE -ne 0){ throw "Launcher smoke failed: $out" }
+          $launcher = Join-Path $package 'Start-NEURA.ps1'
+          $out = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $launcher -SmokeTest -NoBrowser -Listen '127.0.0.1:8765' -Workspace $workspace -DataDir $data 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          if($code -ne 0){ throw "Launcher smoke failed with exit $code: $out" }
           if($out -notmatch 'NEURA_SMOKE_OK'){ throw "Launcher smoke success marker missing: $out" }
 
       - uses: actions/upload-artifact@v4
