@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T17:00:00+02:00",
-  "current_branch": "main",
-  "candidate": "",
-  "last_good_commit": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2",
-  "rollback_branch": "rollback/pre-memory-hardening-20260925-1652",
-  "rollback_commit": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
-  "current_gate": "POST_V1_WINDOWS_PACKAGING",
+  "updated_at": "2026-09-25T17:20:00+02:00",
+  "current_branch": "candidate/windows-package-ux-20260925-1710",
+  "candidate": "candidate/windows-package-ux-20260925-1710",
+  "last_good_commit": "d4145b544858b396bdfaa7dc011d2eb6eff3738e",
+  "rollback_branch": "rollback/pre-windows-package-ux-20260925-1710",
+  "rollback_commit": "d4145b544858b396bdfaa7dc011d2eb6eff3738e",
+  "current_gate": "POST_V1_WINDOWS_PACKAGING_EXACT_HEAD_VALIDATION",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,22 +49,22 @@
   },
   "last_tests": [
     {
-      "name": "memory hardening exact-head RC2",
-      "run_id": 36151061125,
+      "name": "Windows package user-ready slice",
+      "run_id": 36153160913,
       "result": "PASS",
-      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
+      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
     },
     {
-      "name": "memory hardening exact-head Promotion Gate",
-      "run_id": 36151060968,
+      "name": "Windows package exact-head RC2",
+      "run_id": 36153160886,
       "result": "PASS",
-      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
+      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
     },
     {
-      "name": "memory hardening exact-head Windows Package",
-      "run_id": 36151061124,
+      "name": "Windows package exact-head Promotion Gate",
+      "run_id": 36153160870,
       "result": "PASS",
-      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
+      "head_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1"
     }
   ],
   "benchmark_baseline": {
@@ -110,23 +110,46 @@
         "http_current_truth_history": "PASS",
         "ui_memory_recall_history_wiring": "PASS"
       }
+    },
+    "post_v1_windows_packaging": {
+      "baseline_sha": "d4145b544858b396bdfaa7dc011d2eb6eff3738e",
+      "before": {
+        "artifact": "single neura.exe",
+        "user_start": "run executable/manual script; source fallback could require Go",
+        "preflight": "none in published package",
+        "package_integrity": "no packaged SHA256 manifest",
+        "startup_error_ux": "not package-tested"
+      },
+      "candidate_sha": "089c16e7cae4fd25a163d0e9be7145044e25daa1",
+      "after": {
+        "portable_folder": "PASS",
+        "double_click_launcher": "PASS",
+        "go_not_required_at_runtime": "PASS",
+        "writable_data_workspace_preflight": "PASS",
+        "loopback_port_preflight": "PASS",
+        "missing_executable_actionable_error": "PASS",
+        "launcher_health_smoke_clean_stop": "PASS",
+        "sha256_manifest": "PASS",
+        "artifact_upload": "PASS"
+      }
     }
   },
   "blockers": [
-    "GitHub branch protection is disabled for main/stable; protection remains procedural."
+    "GitHub branch protection is disabled for main/stable; protection remains procedural.",
+    "Final state commit must pass exact-head RC2/Promotion before packaging slice promotion."
   ],
   "implemented_this_run": [
-    "DEBT CLOSED: exact durable-task recovery HEAD bd1148a passed RC2, Windows Package and Promotion Gate attempt 2 and was fast-forwarded to main.",
-    "PASS 1 memory runtime: enforced linear supersession lineage, rejected forked/cross-type/self supersession conflicts before persistence, and validated the complete memory graph fail-closed on restart.",
-    "PASS 1 persistence/retrieval: added durable MemoryLineage history while keeping hybrid retrieval current-truth-only after supersession and restart.",
-    "PASS 2 API: added GET /memory/history, explicit HTTP conflict status and truthful memory governance status.",
-    "PASS 2 UX: added premium Memoria Attiva search/current-truth panel and lineage-history inspection to the local NEURA shell.",
-    "Regression/benchmark: new restart/conflict/API/UI tests passed; BenchmarkC953Retrieve500 measured 688277 -> 359286 ns/op on CI with no observed performance regression."
+    "DEBT PREVIOUS: memory hardening and its state handoff were already promoted; resumed exact next_action Windows packaging.",
+    "PASS 1 product: created a portable NEURA-Windows folder with neura.exe, double-click Launch-NEURA.cmd, Start-NEURA.ps1, LEGGIMI and SHA256 package manifest.",
+    "PASS 1 preflight: launcher validates packaged executable, writable local data/workspace/log folders, loopback-only listen address, port availability and post-start /health.",
+    "PASS 1 error UX: actionable Italian startup errors are shown and persisted to %LOCALAPPDATA%\\NEURA\\logs; existing healthy NEURA is detected and reused.",
+    "PASS 2 native validation: Windows CI verifies package contents/hash, preflight without runtime Go, missing-executable failure UX, real launcher startup/health and clean stop, then uploads the complete package.",
+    "PASS 2 developer path: build-windows creates the same portable package and run-windows delegates through the same launcher used by end users; README no longer instructs an obsolete raw-exe flow."
   ],
   "release": {
     "status": "NEURA V1 — RELEASE CANDIDATE VERIFIED",
     "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
     "promotion_gate_run_id": 36119854282
   },
-  "next_action": "Create rollback and candidate from main at 833665a4944aa98110fbcf7e4b14f9fcfe061ea2, then implement a Windows packaging slice with a user-facing launcher, dependency/preflight checks, actionable startup error UX, native Windows tests and package smoke validation."
+  "next_action": "Validate the exact final Windows-packaging HEAD including DIRECTOR_STATE; fix any FAIL on this candidate, otherwise fast-forward the exact green SHA to main, then implement one premium UX command-lifecycle slice with clear thinking/working/result/error states, activity context and mobile/browser visual verification."
 }
