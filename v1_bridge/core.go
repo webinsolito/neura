@@ -60,6 +60,7 @@ func NewStore(dir string)(*Store,error){
 	if _,err:=recoverJSONL(filepath.Join(abs,"memory.jsonl"));err!=nil{return nil,err}
 	if _,err:=recoverJSONL(filepath.Join(abs,"receipts.jsonl"));err!=nil{return nil,err}
 	if err:=s.loadJSONL(filepath.Join(abs,"memory.jsonl"),func(b []byte)error{var m Memory;if err:=json.Unmarshal(b,&m);err!=nil{return err};s.memories=append(s.memories,m);return nil});err!=nil{return nil,err}
+	if err:=validateMemoryGraph(s.memories);err!=nil{return nil,fmt.Errorf("memory graph invalid: %w",err)}
 	if err:=s.loadJSONL(filepath.Join(abs,"receipts.jsonl"),func(b []byte)error{var r Receipt;if err:=json.Unmarshal(b,&r);err!=nil{return err};s.receipts=append(s.receipts,r);return nil});err!=nil{return nil,err}
 	return s,nil
 }
