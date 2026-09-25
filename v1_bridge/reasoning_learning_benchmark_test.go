@@ -15,7 +15,7 @@ func TestReasoningLearningV1Benchmark(t *testing.T) {
 
 	cases := []Plan{
 		{Summary: "empty reasoning plan"},
-		{Summary: "inspect workspace", Steps: []PlanStep{{Tool: "fs.list.workspace", Input: map[string]string{"path": "."}}}},
+		{Summary: "inspect workspace", Steps: []PlanStep{{Tool: "fs.list", Input: map[string]string{"path": "."}}}},
 	}
 
 	completed := 0
