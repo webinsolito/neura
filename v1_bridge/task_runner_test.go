@@ -82,3 +82,26 @@ func TestTaskStoreRejectsInvalidCreationBoundaries(t *testing.T){
 func TestTaskStoreNormalizesSafeCreationInput(t *testing.T){
 	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace);task,err:=runner.store.Create("  task.safe-1  ","  inspect system  ",Plan{Steps:[]PlanStep{{Tool:"system.info",Input:map[string]string{}}}},tools.List());if err!=nil{t.Fatal(err)};if task.ID!="task.safe-1"{t.Fatalf("id=%q",task.ID)}
 }
+
+
+func TestTaskRunnerBlockedReadOnlyCanRetryAfterRepair(t *testing.T) {
+	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace)
+	task,err:=runner.store.Create("retry-read","read after repair",Plan{Steps:[]PlanStep{{Tool:"fs.read",Input:map[string]string{"path":"later.txt"}}}},tools.List());if err!=nil{t.Fatal(err)}
+	blocked,res,err:=runner.RunNext(context.Background(),task.ID,task.Generation);if err!=nil{t.Fatal(err)}
+	if blocked.State!=TaskBlocked||res.Status!="partial"{t.Fatalf("blocked=%+v res=%+v",blocked,res)}
+	if err:=os.WriteFile(filepath.Join(tools.workspace,"later.txt"),[]byte("ready"),0o600);err!=nil{t.Fatal(err)}
+	retry,err:=runner.store.RetryBlocked(task.ID,blocked.Generation);if err!=nil{t.Fatal(err)}
+	if retry.State!=TaskPending||retry.Generation!=blocked.Generation+1||retry.RecoveryCount!=1{t.Fatalf("%+v",retry)}
+	done,res,err:=runner.RunNext(context.Background(),task.ID,retry.Generation);if err!=nil{t.Fatal(err)}
+	if done.State!=TaskSucceeded||res.Status!="ok"||done.NextStep!=1{t.Fatalf("done=%+v res=%+v",done,res)}
+}
+
+func TestTaskRunnerMutatingFailureRequiresManualReview(t *testing.T) {
+	c,_,tools:=testCore(t);runner,_:=NewTaskRunner(c,tools.workspace)
+	task,err:=runner.store.Create("review-write","unsafe write",Plan{Steps:[]PlanStep{{Tool:"fs.write.workspace",Input:map[string]string{"path":"../escape.txt","content":"x"}}}},tools.List());if err!=nil{t.Fatal(err)}
+	review,res,err:=runner.RunNext(context.Background(),task.ID,task.Generation);if err!=nil{t.Fatal(err)}
+	if review.State!=TaskManualReview||review.Generation!=task.Generation+1||review.RecoveryCount!=1||res.Status!="partial"{t.Fatalf("review=%+v res=%+v",review,res)}
+	if _,err:=runner.store.RetryBlocked(task.ID,review.Generation);err==nil{t.Fatal("manual-review mutation accepted by safe retry")}
+	retry,err:=runner.store.ResolveManualReview(task.ID,review.Generation,false);if err!=nil{t.Fatal(err)}
+	if retry.State!=TaskPending||retry.NextStep!=0||retry.RecoveryCount!=2{t.Fatalf("%+v",retry)}
+}
