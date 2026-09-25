@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,9 +32,10 @@ type DurableTask struct {
 	Plan        Plan      `json:"plan"`
 	NextStep    int       `json:"next_step"`
 	RunningStep int       `json:"running_step"`
-	Generation  uint64    `json:"generation"`
-	State       TaskState `json:"state"`
-	LastError   string    `json:"last_error,omitempty"`
+	Generation    uint64    `json:"generation"`
+	State         TaskState `json:"state"`
+	RecoveryCount int       `json:"recovery_count,omitempty"`
+	LastError     string    `json:"last_error,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
@@ -93,6 +95,14 @@ func (s *TaskStore) Create(id,goal string,p Plan,allowed []string)(DurableTask,e
 }
 
 func (s *TaskStore) Get(id string)(DurableTask,bool){s.mu.Lock();defer s.mu.Unlock();t,ok:=s.tasks[id];return t,ok}
+func (s *TaskStore) List(limit int)[]DurableTask{
+	if limit<=0||limit>50{limit=20}
+	s.mu.Lock();defer s.mu.Unlock()
+	out:=make([]DurableTask,0,len(s.tasks));for _,t:=range s.tasks{out=append(out,t)}
+	sort.Slice(out,func(i,j int)bool{return out[i].UpdatedAt.After(out[j].UpdatedAt)})
+	if len(out)>limit{out=out[:limit]}
+	return out
+}
 
 func isMutatingTool(name string) bool {
 	switch name {
@@ -149,7 +159,7 @@ func (s *TaskStore) RecoverInterrupted() error {
 			t.State=TaskPending
 			t.LastError="interrupted during read-only step; safe to retry"
 		}
-		t.RunningStep=-1;t.UpdatedAt=time.Now().UTC();s.tasks[id]=t;changed=true
+		t.RunningStep=-1;t.RecoveryCount++;t.UpdatedAt=time.Now().UTC();s.tasks[id]=t;changed=true
 	}
 	if changed{return s.persistLocked()};return nil
 }
@@ -160,7 +170,27 @@ func (s *TaskStore) ResolveManualReview(id string,generation uint64,effectVerifi
 	if t.Generation!=generation{return DurableTask{},errors.New("stale task generation")}
 	if t.State!=TaskManualReview{return DurableTask{},errors.New("task is not awaiting manual review")}
 	if effectVerified {t.NextStep++}
-	t.State=TaskPending;t.LastError="";t.UpdatedAt=time.Now().UTC();s.tasks[id]=t
+	t.State=TaskPending;t.LastError="";t.RecoveryCount++;t.UpdatedAt=time.Now().UTC();s.tasks[id]=t
+	return t,s.persistLocked()
+}
+
+func (s *TaskStore) RetryBlocked(id string,generation uint64)(DurableTask,error){
+	s.mu.Lock();defer s.mu.Unlock()
+	t,ok:=s.tasks[id];if !ok{return DurableTask{},os.ErrNotExist}
+	if t.Generation!=generation{return DurableTask{},errors.New("stale task generation")}
+	if t.State!=TaskBlocked{return DurableTask{},errors.New("task is not blocked")}
+	if t.NextStep<0||t.NextStep>=len(t.Plan.Steps){return DurableTask{},errors.New("task has no retryable step")}
+	if isMutatingTool(t.Plan.Steps[t.NextStep].Tool){return DurableTask{},errors.New("mutating blocked step requires manual review")}
+	t.Generation++;t.State=TaskPending;t.RunningStep=-1;t.LastError="";t.RecoveryCount++;t.UpdatedAt=time.Now().UTC();s.tasks[id]=t
+	return t,s.persistLocked()
+}
+
+func (s *TaskStore) markManualReview(id string,generation uint64,errText string)(DurableTask,error){
+	s.mu.Lock();defer s.mu.Unlock()
+	t,ok:=s.tasks[id];if !ok{return DurableTask{},os.ErrNotExist}
+	if t.Generation!=generation{return DurableTask{},errors.New("stale task generation")}
+	if t.State!=TaskRunning{return DurableTask{},errors.New("task not running")}
+	t.Generation++;t.State=TaskManualReview;t.RunningStep=-1;t.LastError=errText;t.RecoveryCount++;t.UpdatedAt=time.Now().UTC();s.tasks[id]=t
 	return t,s.persistLocked()
 }
 
@@ -182,6 +212,11 @@ func (r *TaskRunner) RunNext(ctx context.Context,id string,generation uint64) (D
 	success:=res.Status=="ok"&&len(res.Results)==1&&res.Results[0].Verified
 	errText:=res.Message
 	if !success && errText=="" {errText="step failed verification"}
+	if !success&&isMutatingTool(step.Tool){
+		updated,persistErr:=r.store.markManualReview(id,generation,"mutating step not verified; confirm effect before resume: "+errText)
+		if persistErr!=nil{return DurableTask{},res,persistErr}
+		return updated,res,nil
+	}
 	updated,persistErr:=r.store.finishStep(id,generation,success,errText)
 	if persistErr!=nil{return DurableTask{},res,persistErr}
 	return updated,res,nil
