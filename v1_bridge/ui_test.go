@@ -10,8 +10,10 @@ func TestPremiumCommandLifecycleUI(t *testing.T){
  r:=httptest.NewRequest("GET","http://127.0.0.1:8765/",nil); w:=httptest.NewRecorder(); serveUI(w,r)
  if w.Code!=200 { t.Fatalf("status=%d",w.Code) }
  body:=w.Body.String()
- for _,want:=range []string{"PENSO","LAVORO","COMPLETATO","COSA È SUCCESSO","activityTitle","friendlyError","aria-live=\"polite\"","@media(max-width:720px)"}{if !strings.Contains(body,want){t.Fatalf("UI missing %q",want)}}
+ for _,want:=range []string{"PENSO","LAVORO","COMPLETATO","COSA È SUCCESSO","activityTitle","friendlyError","commandResult","taskStateLabel","fetch('/tasks?limit=6')","aria-live=\"polite\"","@media(max-width:720px)"}{if !strings.Contains(body,want){t.Fatalf("UI missing %q",want)}}
  if !strings.Contains(body,"send.disabled") {t.Fatal("submit concurrency guard missing")}
+ if strings.Contains(body,"JSON.stringify(j,null,2)") {t.Fatal("raw command JSON fallback leaked into user result")}
+ if !strings.Contains(body,"if(!b||b.disabled)return;b.disabled=true") {t.Fatal("recovery/history duplicate-submit guard missing")}
 }
 
 func TestUIKeepsLocalSecurityHeaders(t *testing.T){
