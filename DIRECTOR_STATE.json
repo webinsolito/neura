@@ -1,29 +1,32 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T15:44:00+02:00",
+  "updated_at": "2026-09-25T16:45:00+02:00",
   "current_branch": "candidate/post-v1-command-hardening-20260925",
   "candidate": "candidate/post-v1-command-hardening-20260925",
   "last_good_commit": "62d19c62854ba8d7d419d5f7c6595dd90f172560",
   "rollback_branch": "rollback/pre-post-v1-hardening-20260925-1542",
   "rollback_commit": "62d19c62854ba8d7d419d5f7c6595dd90f172560",
-  "current_gate": "POST_V1_SAFETY_COMMAND_BOUNDARIES_VALIDATION",
+  "current_gate": "POST_V1_SAFETY_COMMAND_AND_TASK_BOUNDARIES_VALIDATION",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
-  "quality_rule": "Post-V1 quality is tracked separately from fixed V1 completion; it never increases V1 completion above 100 and only changes after verified hardening or documented regression.",
-  "scoring": {
-    "locked": true,
-    "rule": "Fixed V1 100-point completion gates remain immutable after verified release.",
-    "gate_weights": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3},
-    "completion_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3}
-  },
+  "quality_rule": "Post-V1 quality is tracked separately from fixed V1 completion; scores do not exceed 100. Candidate hardening is not counted as verified until exact-HEAD CI is green.",
+  "scoring": {"locked":true,"rule":"Fixed V1 100-point completion gates remain immutable after verified release.","gate_weights":{"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3},"completion_points":{"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3}},
   "last_tests": [
     {"name":"NEURA Promotion Gate main","run_id":36119854282,"result":"PASS","head_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4"},
-    {"name":"post-v1 command hardening candidate","result":"PENDING","head_sha":"cee2da7f033afb0322f6db6fd9b9c619c1555c44"}
+    {"name":"post-v1 command hardening RC2","run_id":36142823235,"result":"PASS","head_sha":"3b302eb0ddc7d8f2d5736bdefafecdbdcb1b7559"},
+    {"name":"post-v1 Windows Package","run_id":36142823238,"result":"PASS","head_sha":"3b302eb0ddc7d8f2d5736bdefafecdbdcb1b7559"},
+    {"name":"post-v1 Promotion Gate","run_id":36142823330,"result":"FAIL_POLICY_ORDERING_RETRY_REQUESTED","head_sha":"3b302eb0ddc7d8f2d5736bdefafecdbdcb1b7559"},
+    {"name":"command+task boundary final candidate","result":"PENDING","head_sha":"d663e2125b76a933951772ec4bdaaec84d6797ad"}
   ],
   "benchmark_baseline": {"reasoning_learning_v1":{"head_sha":"3cdf01cefaf65c430319910f4afbede50e3c782d","task_completion":"2/2","verified_tool_selection_execution":"1/1","governed_learning":"PASS","rollback_ready_required":true,"auto_promotion":false,"external_paid_service_required":false}},
-  "blockers": ["GitHub branch protection is disabled for main/stable; protection remains procedural.","Post-V1 command hardening candidate requires CI validation before promotion."],
-  "implemented_this_run": ["Added server-side normalized command validation before Core.Execute.","Empty/whitespace-only commands now fail closed with HTTP 400.","Commands over 4000 Unicode characters now fail closed before planning/execution.","Added HTTP regression tests for empty, oversized and trimmed message-fallback commands.","Exposed max_command_characters in /status security metadata."],
+  "blockers": ["GitHub branch protection is disabled for main/stable; protection remains procedural.","Exact final candidate HEAD requires CI validation before promotion."],
+  "implemented_this_run": [
+    "PASS 1: resolved prior validation debt by confirming RC2 and Windows Package green and retrying the promotion-policy job that had failed after all code tests passed.",
+    "PASS 2: extended the same input-boundary hardening to durable tasks: normalized task IDs/goals, restricted IDs to route-safe characters, bounded IDs to 128 chars, goals to 4000 Unicode chars, and plans to 1..32 steps before persistence.",
+    "Added durable-task regression coverage for traversal-like IDs, oversized IDs/goals, empty goals/plans, oversized plans and safe normalization.",
+    "Preserved existing secret firewall, allowed-tool validation, generation checks and interruption recovery semantics."
+  ],
   "release": {"status":"NEURA V1 — RELEASE CANDIDATE VERIFIED","verified_sha":"7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4","promotion_gate_run_id":36119854282},
-  "next_action": "Validate PR #27 on the exact final candidate HEAD; if any test fails, fix it on the same candidate; if all required Linux/Windows/promotion checks pass, promote the exact verified SHA to main and then harden task API input boundaries in the next run."
+  "next_action": "Validate PR #27 on the exact final candidate HEAD containing command and durable-task boundary hardening; fix any FAIL on this same candidate, otherwise promote the exact green SHA to main, then begin planning+tool-execution+recovery end-to-end hardening."
 }
