@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -69,4 +70,38 @@ func TestDirectRememberUsesGovernedWrite(t *testing.T) {
 	r := c.Execute(context.Background(), "ricorda governance attiva")
 	if r.Status != "ok" || len(r.Memory) != 1 { t.Fatalf("%+v", r) }
 	if r.Memory[0].Type != "fact" || r.Memory[0].Provenance != "user-direct" { t.Fatalf("%+v", r.Memory[0]) }
+}
+
+
+func TestGovernedMemoryRejectsForkedTruth(t *testing.T) {
+	s,_:=NewStore(filepath.Join(t.TempDir(),"data"))
+	old,_,err:=s.SaveGovernedMemory(context.Background(),"office is in room one",MemoryWriteMeta{Type:"fact",Provenance:"user-direct"},nil);if err!=nil{t.Fatal(err)}
+	if _,_,err:=s.SaveGovernedMemory(context.Background(),"office is in room two",MemoryWriteMeta{Type:"fact",Provenance:"user-direct",Supersedes:old.ID},nil);err!=nil{t.Fatal(err)}
+	if _,_,err:=s.SaveGovernedMemory(context.Background(),"office is in room three",MemoryWriteMeta{Type:"fact",Provenance:"user-direct",Supersedes:old.ID},nil);err==nil{t.Fatal("forked truth accepted")}
+}
+
+func TestGovernedMemoryRejectsCrossTypeSupersession(t *testing.T) {
+	s,_:=NewStore(filepath.Join(t.TempDir(),"data"))
+	old,_,err:=s.SaveGovernedMemory(context.Background(),"theme is dark",MemoryWriteMeta{Type:"fact",Provenance:"user-direct"},nil);if err!=nil{t.Fatal(err)}
+	if _,_,err:=s.SaveGovernedMemory(context.Background(),"prefer dark theme",MemoryWriteMeta{Type:"preference",Provenance:"user-direct",Supersedes:old.ID},nil);err==nil{t.Fatal("cross-type supersession accepted")}
+}
+
+func TestGovernedMemoryLineagePersistsAcrossRestart(t *testing.T) {
+	dir:=filepath.Join(t.TempDir(),"data");s,_:=NewStore(dir)
+	first,_,err:=s.SaveGovernedMemory(context.Background(),"desk is in room one",MemoryWriteMeta{Type:"fact",Provenance:"user-direct"},nil);if err!=nil{t.Fatal(err)}
+	second,_,err:=s.SaveGovernedMemory(context.Background(),"desk is in room two",MemoryWriteMeta{Type:"fact",Provenance:"user-direct",Supersedes:first.ID},nil);if err!=nil{t.Fatal(err)}
+	third,_,err:=s.SaveGovernedMemory(context.Background(),"desk is in room three",MemoryWriteMeta{Type:"fact",Provenance:"user-direct",Supersedes:second.ID},nil);if err!=nil{t.Fatal(err)}
+	reloaded,err:=NewStore(dir);if err!=nil{t.Fatal(err)}
+	lineage,err:=reloaded.MemoryLineage(third.ID);if err!=nil{t.Fatal(err)}
+	if len(lineage)!=3||lineage[0].ID!=third.ID||lineage[1].ID!=second.ID||lineage[2].ID!=first.ID{t.Fatalf("%+v",lineage)}
+	got:=reloaded.SearchMemoryHybrid(context.Background(),"desk room",10,nil)
+	if len(got)==0||got[0].ID!=third.ID{t.Fatalf("current truth missing after restart: %+v",got)}
+	for _,m:=range got{if m.ID==first.ID||m.ID==second.ID{t.Fatalf("stale truth returned: %+v",got)}}
+}
+
+func TestStoreFailsClosedOnPersistedMemoryFork(t *testing.T) {
+	dir:=filepath.Join(t.TempDir(),"data");if err:=os.MkdirAll(dir,0o700);err!=nil{t.Fatal(err)}
+	now:=time.Now().UTC();a:=Memory{ID:"a",Text:"alpha",Persistent:true,CreatedAt:now,Type:"fact",Provenance:"test",ValidFrom:now};b:=Memory{ID:"b",Text:"beta",Persistent:true,CreatedAt:now,Type:"fact",Provenance:"test",ValidFrom:now,Supersedes:"a"};cc:=Memory{ID:"c",Text:"gamma",Persistent:true,CreatedAt:now,Type:"fact",Provenance:"test",ValidFrom:now,Supersedes:"a"}
+	path:=filepath.Join(dir,"memory.jsonl");if err:=appendJSONL(path,a);err!=nil{t.Fatal(err)};if err:=appendJSONL(path,b);err!=nil{t.Fatal(err)};if err:=appendJSONL(path,cc);err!=nil{t.Fatal(err)}
+	if _,err:=NewStore(dir);err==nil{t.Fatal("forked persisted graph did not fail closed")}
 }
