@@ -24,6 +24,18 @@ func doReq(t *testing.T, s *Server, method, path string, body any, origin string
 	if origin != "" { req.Header.Set("Origin", origin) }
 	rr := httptest.NewRecorder(); s.routes().ServeHTTP(rr, req); return rr
 }
+func TestLocalUIAndAPIWiring(t *testing.T) {
+	s := testServer(t)
+	rr := doReq(t, s, "GET", "/", nil, "")
+	if rr.Code != 200 { t.Fatalf("ui code=%d body=%s", rr.Code, rr.Body.String()) }
+	if ct:=rr.Header().Get("Content-Type"); ct!="text/html; charset=utf-8" { t.Fatalf("content-type=%q",ct) }
+	body:=rr.Body.Bytes()
+	for _, token := range []string{"NEURA", "data-state=\"idle\"", "fetch('/status')", "fetch('/command'", "Content-Security-Policy"} { if !bytes.Contains(body,[]byte(token)) && token!="Content-Security-Policy" { t.Fatalf("UI missing %q",token) } }
+	if rr.Header().Get("Content-Security-Policy")=="" { t.Fatal("missing CSP") }
+	rr = doReq(t,s,"GET","/status",nil,""); if rr.Code!=200 || !bytes.Contains(rr.Body.Bytes(),[]byte(`"core":"online"`)) { t.Fatalf("status=%d %s",rr.Code,rr.Body.String()) }
+	rr = doReq(t,s,"POST","/command",map[string]string{"goal":"ricorda ui wiring reale"},""); if rr.Code!=200 { t.Fatalf("command=%d %s",rr.Code,rr.Body.String()) }
+}
+func TestUIUnknownPathDoesNotMasqueradeAsApp(t *testing.T){ s:=testServer(t); rr:=doReq(t,s,"GET","/missing-ui-route",nil,""); if rr.Code!=http.StatusNotFound { t.Fatalf("code=%d",rr.Code) } }
 func TestHealthAndCommand(t *testing.T) {
 	s := testServer(t)
 	rr := doReq(t, s, "GET", "/health", nil, ""); if rr.Code != 200 { t.Fatal(rr.Code, rr.Body.String()) }
