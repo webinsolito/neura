@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T18:40:00+02:00",
-  "current_branch": "candidate/premium-command-lifecycle-20260925-1738",
-  "candidate": "candidate/premium-command-lifecycle-20260925-1738",
-  "last_good_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
+  "updated_at": "2026-09-25T18:47:00+02:00",
+  "current_branch": "main",
+  "candidate": "",
+  "last_good_commit": "5a000d84f727ae7fcc79ca4e763854b2ecf4e6d5",
   "rollback_branch": "rollback/pre-premium-ux-handoff-20260925-1722",
   "rollback_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
-  "current_gate": "POST_V1_PREMIUM_UX_EXACT_HEAD_VALIDATION",
+  "current_gate": "POST_V1_AGENT_LOOP_RECOVERY_NEXT",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,24 +49,25 @@
   },
   "last_tests": [
     {
-      "name": "Premium UX first-head Windows Package",
-      "run_id": 36155732090,
+      "name": "Premium UX exact-head Windows Package",
+      "run_id": 36162713803,
       "result": "PASS",
-      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8"
+      "head_sha": "d7ee3aefea8b02156bbeee03536c4cd1aa73208e"
     },
     {
-      "name": "Premium UX first-head Promotion Gate",
-      "run_id": 36155731985,
-      "result": "FAIL",
-      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8",
-      "failure": "stale UI wiring expected tasks limit 6"
+      "name": "Premium UX exact-head RC2 PR Validation",
+      "run_id": 36162713846,
+      "result": "PASS",
+      "head_sha": "d7ee3aefea8b02156bbeee03536c4cd1aa73208e",
+      "linux": "PASS",
+      "windows": "PASS"
     },
     {
-      "name": "Premium UX first-head RC2 PR Validation",
-      "run_id": 36155732059,
-      "result": "FAIL",
-      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8",
-      "failure": "stale UI wiring expected tasks limit 6"
+      "name": "Premium UX exact-head Promotion Gate",
+      "run_id": 36162713839,
+      "attempt": 2,
+      "result": "PASS",
+      "head_sha": "d7ee3aefea8b02156bbeee03536c4cd1aa73208e"
     }
   ],
   "benchmark_baseline": {
@@ -157,20 +158,20 @@
     }
   },
   "blockers": [
-    "GitHub branch protection is disabled for main/stable; protection remains procedural.",
-    "Exact final candidate HEAD including DIRECTOR_STATE must pass RC2, Promotion Gate and Windows Package before promotion."
+    "GitHub branch protection is disabled for main/stable; protection remains procedural."
   ],
   "implemented_this_run": [
-    "DEBT PREVIOUS: investigated exact failing jobs on PR #33; both Linux/Windows failures were the same stale UI contract around recovery task limit.",
-    "PASS 1: restored six recovery tasks and improved command result presentation so successful commands no longer fall back to raw developer JSON.",
-    "PASS 1 UX: translated recovery states into user-facing labels, changed progress to Passo X di Y, and clear/refocus the composer after success.",
-    "PASS 2 failure-mode: fenced recovery actions and memory-history requests against duplicate clicks to avoid duplicate transitions/requests.",
-    "PASS 2 regression: added UI assertions for six-task wiring, readable result formatter, no raw JSON fallback, and duplicate-submit fencing."
+    "DEBT PREVIOUS CLOSED: PR #33 exact-HEAD CI was investigated, repaired and promoted instead of being abandoned.",
+    "PASS 1: restored six recovery tasks, readable command results, user-facing recovery labels, Passo X di Y progress and composer reset/refocus.",
+    "PASS 2: added duplicate-submit fencing for recovery transitions and memory-history requests plus regression coverage.",
+    "CI repair: aligned the integration wiring contract to the six-task UI and reran the Promotion Gate only after Linux+Windows validation evidence existed.",
+    "PROMOTION: PR #33 merged to main after Windows Package, RC2 Linux/Windows and Promotion Gate all passed on candidate SHA d7ee3aef."
   ],
   "release": {
-    "status": "NEURA V1 — RELEASE CANDIDATE VERIFIED",
-    "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
-    "promotion_gate_run_id": 36119854282
+    "status": "NEURA V1 100% — POST-V1 PREMIUM UX VERIFIED",
+    "verified_sha": "d7ee3aefea8b02156bbeee03536c4cd1aa73208e",
+    "promotion_gate_run_id": 36162713839,
+    "promoted_main_sha": "5a000d84f727ae7fcc79ca4e763854b2ecf4e6d5"
   },
-  "next_action": "Validate the exact final candidate HEAD including DIRECTOR_STATE on RC2, Promotion Gate and Windows Package; fix any red on this same UX/runtime slice, otherwise merge PR #33 to main and keep V1 completion at 100%."
+  "next_action": "Create rollback and a new candidate from main, then close one high-impact agent-loop package: durable multi-step goal execution with explicit progress, restart-safe checkpoint/resume, failure injection and recovery UX, verified end-to-end without paid services."
 }
