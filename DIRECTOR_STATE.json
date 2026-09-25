@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T17:22:00+02:00",
-  "current_branch": "main",
-  "candidate": "",
+  "updated_at": "2026-09-25T18:40:00+02:00",
+  "current_branch": "candidate/premium-command-lifecycle-20260925-1738",
+  "candidate": "candidate/premium-command-lifecycle-20260925-1738",
   "last_good_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
   "rollback_branch": "rollback/pre-premium-ux-handoff-20260925-1722",
   "rollback_commit": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7",
-  "current_gate": "POST_V1_PREMIUM_UX_COMMAND_LIFECYCLE",
+  "current_gate": "POST_V1_PREMIUM_UX_EXACT_HEAD_VALIDATION",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,23 +49,24 @@
   },
   "last_tests": [
     {
-      "name": "Windows packaging exact-head RC2",
-      "run_id": 36153405702,
+      "name": "Premium UX first-head Windows Package",
+      "run_id": 36155732090,
       "result": "PASS",
-      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
+      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8"
     },
     {
-      "name": "Windows packaging exact-head Windows Package",
-      "run_id": 36153405662,
-      "result": "PASS",
-      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
+      "name": "Premium UX first-head Promotion Gate",
+      "run_id": 36155731985,
+      "result": "FAIL",
+      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8",
+      "failure": "stale UI wiring expected tasks limit 6"
     },
     {
-      "name": "Windows packaging exact-head Promotion Gate",
-      "run_id": 36153405654,
-      "attempt": 2,
-      "result": "PASS",
-      "head_sha": "4d9ce335f943ab9f75b9d7f1a3d38373dc49f8a7"
+      "name": "Premium UX first-head RC2 PR Validation",
+      "run_id": 36155732059,
+      "result": "FAIL",
+      "head_sha": "264091abd022b74ebc6000351a76cdf4496f64f8",
+      "failure": "stale UI wiring expected tasks limit 6"
     }
   ],
   "benchmark_baseline": {
@@ -133,23 +134,43 @@
         "sha256_manifest": "PASS",
         "artifact_upload": "PASS"
       }
+    },
+    "post_v1_premium_command_ux": {
+      "baseline_sha": "150c37397190ba39d23f981659b18f9c9444e1bd",
+      "candidate_pre_state_sha": "1b44fc7c6a7e3b3d890a19096972f9095b63fd51",
+      "before": {
+        "command_lifecycle": "no explicit thinking/working/success/error user lifecycle",
+        "result_fallback": "developer-oriented raw JSON possible",
+        "recovery_actions": "duplicate click not fenced",
+        "recovery_task_visibility": "regressed to 4 while integration contract expected 6"
+      },
+      "after": {
+        "lifecycle_states": "implemented",
+        "readable_result_formatter": "implemented",
+        "recovery_state_labels": "implemented",
+        "task_progress_wording": "implemented",
+        "recovery_duplicate_submit_guard": "implemented",
+        "memory_history_duplicate_submit_guard": "implemented",
+        "recovery_task_limit_6": "restored",
+        "mobile_layout": "implemented"
+      }
     }
   },
   "blockers": [
-    "GitHub branch protection is disabled for main/stable; protection remains procedural."
+    "GitHub branch protection is disabled for main/stable; protection remains procedural.",
+    "Exact final candidate HEAD including DIRECTOR_STATE must pass RC2, Promotion Gate and Windows Package before promotion."
   ],
   "implemented_this_run": [
-    "DEBT PREVIOUS: memory hardening and its state handoff were already promoted; resumed exact next_action Windows packaging.",
-    "PASS 1 product: created a portable NEURA-Windows folder with neura.exe, double-click Launch-NEURA.cmd, Start-NEURA.ps1, LEGGIMI and SHA256 package manifest.",
-    "PASS 1 preflight: launcher validates packaged executable, writable local data/workspace/log folders, loopback-only listen address, port availability and post-start /health.",
-    "PASS 1 error UX: actionable Italian startup errors are shown and persisted to %LOCALAPPDATA%\\NEURA\\logs; existing healthy NEURA is detected and reused.",
-    "PASS 2 native validation: Windows CI verifies package contents/hash, preflight without runtime Go, missing-executable failure UX, real launcher startup/health and clean stop, then uploads the complete package.",
-    "PASS 2 developer path: build-windows creates the same portable package and run-windows delegates through the same launcher used by end users; README no longer instructs an obsolete raw-exe flow."
+    "DEBT PREVIOUS: investigated exact failing jobs on PR #33; both Linux/Windows failures were the same stale UI contract around recovery task limit.",
+    "PASS 1: restored six recovery tasks and improved command result presentation so successful commands no longer fall back to raw developer JSON.",
+    "PASS 1 UX: translated recovery states into user-facing labels, changed progress to Passo X di Y, and clear/refocus the composer after success.",
+    "PASS 2 failure-mode: fenced recovery actions and memory-history requests against duplicate clicks to avoid duplicate transitions/requests.",
+    "PASS 2 regression: added UI assertions for six-task wiring, readable result formatter, no raw JSON fallback, and duplicate-submit fencing."
   ],
   "release": {
     "status": "NEURA V1 — RELEASE CANDIDATE VERIFIED",
     "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
     "promotion_gate_run_id": 36119854282
   },
-  "next_action": "Create a rollback and candidate from main, then implement one premium UX command-lifecycle slice: make thinking/working/success/error states explicit, show current activity and useful result/error context without developer clutter, improve mobile responsiveness, and verify the full local command flow plus browser-visible UI behavior before promotion."
+  "next_action": "Validate the exact final candidate HEAD including DIRECTOR_STATE on RC2, Promotion Gate and Windows Package; fix any red on this same UX/runtime slice, otherwise merge PR #33 to main and keep V1 completion at 100%."
 }
