@@ -4,7 +4,7 @@ NEURA is a local-first Windows AI agent focused on **reliability first, then spe
 
 ## Current verified baseline
 
-The active integration line is `main`; `stable` remains a separate known-good release line. At `b64c33f7f6a5aa07a3b769d1ae74c4bfad51497d` the following GitHub Actions runs completed successfully:
+The active integration line is `main`; `stable` remains a separate known-good release line. The exact current verified evidence is recorded in `DIRECTOR_STATE.json`; do not rely on a stale SHA copied into documentation. The required GitHub Actions evidence includes:
 
 - **NEURA V1 RC2 Pull Request Validation** — Linux and Windows native tests/builds, `go vet`, race detector, retrieval benchmark smoke, startup/health/memory smoke and Windows observe smoke.
 - **NEURA Promotion Gate** — exact-SHA promotion validation.
@@ -17,12 +17,14 @@ GitHub branch protection is **not currently enabled** for `stable`; stable prote
 ### Option A — verified CI package
 
 1. Open the successful **NEURA Windows Package** workflow for the target commit.
-2. Download the `neura-windows-amd64` artifact.
-3. Extract it to a normal user-writable folder.
-4. Start NEURA with the packaged launcher/executable.
-5. Confirm the local health endpoint responds before relying on the agent for work.
+2. Download the `NEURA-Windows-amd64` artifact.
+3. Extract the complete `NEURA-Windows` folder.
+4. Double-click **`Launch-NEURA.cmd`**.
+5. The launcher checks the executable, writable data/workspace folders, the local port and the health endpoint; when ready it opens the local NEURA interface.
 
-The package workflow performs a real startup + health smoke test before publishing the artifact. A package from another SHA is not evidence for the current SHA.
+The published package does **not** require Go or a paid cloud/API dependency at runtime. Data and logs stay under the local Windows profile by default. If startup fails, the launcher shows an actionable message and records details under `%LOCALAPPDATA%\NEURA\logs`.
+
+The package workflow verifies package contents and SHA256, a successful preflight, the missing-executable failure UX, a real launcher startup/health check and clean shutdown before publishing the artifact. A package from another SHA is not evidence for the current SHA.
 
 ### Option B — build locally
 
@@ -33,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\run-windows.ps1
 ```
 
-`build-windows.ps1` is the reproducible build entry point. `run-windows.ps1` starts the packaged application and can fall back to building when the binary is absent.
+`build-windows.ps1` is the reproducible developer build entry point and creates `dist\NEURA-Windows` with the executable, double-click launcher, preflight launcher, instructions and SHA256 manifest. `run-windows.ps1` builds only when needed, then runs through the same packaged launcher path used by users.
 
 ## Verification before release
 
