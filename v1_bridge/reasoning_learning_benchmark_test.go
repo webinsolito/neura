@@ -11,10 +11,7 @@ import (
 // requiring a paid model or network service.
 func TestReasoningLearningV1Benchmark(t *testing.T) {
 	workspace := t.TempDir()
-	core, err := NewCore(workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
+	core, _, _ := testCore(t)
 
 	cases := []Plan{
 		{Summary: "empty reasoning plan"},
