@@ -21,6 +21,8 @@ const (
 	TaskBlocked      TaskState = "blocked"
 	TaskManualReview TaskState = "manual_review"
 	TaskCancelled    TaskState = "cancelled"
+	maxTaskIDChars             = 128
+	maxTaskSteps               = 32
 )
 
 type DurableTask struct {
@@ -66,9 +68,22 @@ func taskPlanPersistable(p Plan) error {
 	return nil
 }
 
+func normalizedTaskCreate(id,goal string,p Plan)(string,string,error){
+	id=strings.TrimSpace(id);goal=strings.TrimSpace(goal)
+	if id==""{return "","",errors.New("task id required")}
+	if len([]rune(id))>maxTaskIDChars{return "","",fmt.Errorf("task id exceeds %d characters",maxTaskIDChars)}
+	for _,r:=range id {if !((r>='a'&&r<='z')||(r>='A'&&r<='Z')||(r>='0'&&r<='9')||r=='-'||r=='_'||r=='.'){return "","",errors.New("task id contains unsupported characters")}}
+	if goal==""{return "","",errors.New("task goal required")}
+	if len([]rune(goal))>maxCommandRunes{return "","",fmt.Errorf("task goal exceeds %d characters",maxCommandRunes)}
+	if len(p.Steps)==0{return "","",errors.New("task plan requires at least one step")}
+	if len(p.Steps)>maxTaskSteps{return "","",fmt.Errorf("task plan exceeds %d steps",maxTaskSteps)}
+	return id,goal,nil
+}
+
 func (s *TaskStore) Create(id,goal string,p Plan,allowed []string)(DurableTask,error){
 	s.mu.Lock();defer s.mu.Unlock()
-	id=strings.TrimSpace(id);if id==""{return DurableTask{},errors.New("task id required")}
+	var err error
+	id,goal,err=normalizedTaskCreate(id,goal,p);if err!=nil{return DurableTask{},err}
 	if _,ok:=s.tasks[id];ok{return DurableTask{},errors.New("task id already exists")}
 	checked,err:=validatePlan(p,allowed);if err!=nil{return DurableTask{},err}
 	if err:=taskPlanPersistable(checked);err!=nil{return DurableTask{},err}
