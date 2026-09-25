@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-25T08:00:00+02:00",
+  "current_branch": "candidate/director-state-bootstrap-20260925",
+  "candidate": "candidate/director-state-bootstrap-20260925",
+  "last_good_commit": "3cdf01cefaf65c430319910f4afbede50e3c782d",
+  "rollback_branch": "rollback/pre-director-state-bootstrap-20260925",
+  "rollback_commit": "3cdf01cefaf65c430319910f4afbede50e3c782d",
+  "current_gate": "H_UI_UX_with_I_3D_entity",
+  "completion_score": 91,
+  "verification_score": 87,
+  "scoring": {
+    "locked": true,
+    "rule": "Fixed 100-point completion gates. Completion points increase only for implemented+verified work; verification is tracked separately.",
+    "gate_weights": {
+      "A_startup": 5,
+      "B_core": 12,
+      "C_planning": 8,
+      "D_tools": 10,
+      "E_memory": 8,
+      "F_recovery": 8,
+      "G_safety": 10,
+      "H_ui": 8,
+      "I_graphics": 7,
+      "J_tests": 8,
+      "K_regression": 5,
+      "L_package": 5,
+      "M_documentation": 3,
+      "N_release": 3
+    },
+    "completion_points": {
+      "A_startup": 5,
+      "B_core": 12,
+      "C_planning": 8,
+      "D_tools": 10,
+      "E_memory": 8,
+      "F_recovery": 8,
+      "G_safety": 10,
+      "H_ui": 6,
+      "I_graphics": 3,
+      "J_tests": 8,
+      "K_regression": 5,
+      "L_package": 5,
+      "M_documentation": 3,
+      "N_release": 0
+    },
+    "verification_points": {
+      "A_startup": 5,
+      "B_core": 12,
+      "C_planning": 8,
+      "D_tools": 10,
+      "E_memory": 8,
+      "F_recovery": 8,
+      "G_safety": 10,
+      "H_ui": 4,
+      "I_graphics": 1,
+      "J_tests": 8,
+      "K_regression": 5,
+      "L_package": 5,
+      "M_documentation": 3,
+      "N_release": 0
+    }
+  },
+  "last_tests": [
+    {
+      "name": "NEURA Promotion Gate",
+      "run_id": 36092819484,
+      "attempt": 2,
+      "result": "PASS",
+      "head_sha": "3cdf01cefaf65c430319910f4afbede50e3c782d"
+    },
+    {
+      "name": "NEURA V1 RC2 Pull Request Validation",
+      "run_id": 36092819438,
+      "attempt": 1,
+      "result": "PASS",
+      "head_sha": "3cdf01cefaf65c430319910f4afbede50e3c782d"
+    },
+    {
+      "name": "NEURA Windows Package",
+      "run_id": 36092819530,
+      "attempt": 1,
+      "result": "PASS",
+      "head_sha": "3cdf01cefaf65c430319910f4afbede50e3c782d"
+    }
+  ],
+  "benchmark_baseline": {
+    "reasoning_learning_v1": {
+      "head_sha": "3cdf01cefaf65c430319910f4afbede50e3c782d",
+      "task_completion": "2/2",
+      "verified_tool_selection_execution": "1/1",
+      "governed_learning": "PASS",
+      "rollback_ready_required": true,
+      "auto_promotion": false,
+      "external_paid_service_required": false
+    }
+  },
+  "blockers": [
+    "No real user-facing UI is served by the local NEURA server; repository tree contains no dedicated HTML/CSS/JS UI.",
+    "Premium 3D NEURA entity is not implemented or integration-tested.",
+    "GitHub branch protection is disabled for main/stable; protection remains procedural."
+  ],
+  "next_action": "Implement a real local UI shell served at GET /, wire it to /status and /command, render a responsive premium CSS 3D NEURA entity with idle/thinking/success/error states, and add HTTP integration tests without external paid dependencies."
+}
