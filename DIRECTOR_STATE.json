@@ -1,39 +1,37 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-25T08:41:00+02:00",
+  "updated_at": "2026-09-25T09:40:00+02:00",
   "current_branch": "candidate/ui-shell-3d-20260925-0838",
   "candidate": "candidate/ui-shell-3d-20260925-0838",
-  "last_good_commit": "d02a896e977d2252be1472e7ef99aefb32dff5b6",
+  "last_good_commit": "23ff3a4ce020f45d83c828f787fb23a411db6aec",
   "rollback_branch": "rollback/pre-ui-shell-20260925-0838",
   "rollback_commit": "d02a896e977d2252be1472e7ef99aefb32dff5b6",
-  "current_gate": "H_UI_UX_with_I_3D_entity_validation",
-  "completion_score": 91,
-  "verification_score": 87,
+  "current_gate": "N_release_candidate_validation",
+  "completion_score": 97,
+  "verification_score": 97,
   "scoring": {
     "locked": true,
     "rule": "Fixed 100-point completion gates. Completion points increase only for implemented+verified work; verification is tracked separately.",
     "gate_weights": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":3},
-    "completion_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":6,"I_graphics":3,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0},
-    "verification_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":4,"I_graphics":1,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0}
+    "completion_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0},
+    "verification_points": {"A_startup":5,"B_core":12,"C_planning":8,"D_tools":10,"E_memory":8,"F_recovery":8,"G_safety":10,"H_ui":8,"I_graphics":7,"J_tests":8,"K_regression":5,"L_package":5,"M_documentation":3,"N_release":0}
   },
   "last_tests": [
-    {"name":"NEURA Promotion Gate","run_id":36101133531,"attempt":1,"result":"PASS","head_sha":"d02a896e977d2252be1472e7ef99aefb32dff5b6"},
-    {"name":"NEURA V1 RC2 Pull Request Validation","run_id":36101133427,"attempt":1,"result":"PASS","head_sha":"d02a896e977d2252be1472e7ef99aefb32dff5b6"},
-    {"name":"UI candidate PR checks","result":"IN_PROGRESS","head_sha":"31779532ca6a362744361fe4f1cf5421ab2072c3","checks_seen":6}
+    {"name":"NEURA V1 RC2 Pull Request Validation","run_id":36103932337,"result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
+    {"name":"NEURA Promotion Gate","run_id":36103932325,"result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
+    {"name":"windows-native","result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"},
+    {"name":"linux","result":"PASS","head_sha":"23ff3a4ce020f45d83c828f787fb23a411db6aec"}
   ],
   "benchmark_baseline": {"reasoning_learning_v1":{"head_sha":"3cdf01cefaf65c430319910f4afbede50e3c782d","task_completion":"2/2","verified_tool_selection_execution":"1/1","governed_learning":"PASS","rollback_ready_required":true,"auto_promotion":false,"external_paid_service_required":false}},
   "blockers": [
-    "UI shell and CSS 3D entity are implemented on candidate but full Linux/Windows/Promotion validation is still in progress; no completion points may be awarded yet.",
+    "Final release-candidate verification/promotion remains before N_release can receive its 3 points.",
     "GitHub branch protection is disabled for main/stable; protection remains procedural."
   ],
   "implemented_this_run": [
-    "GET / now serves a real local user-facing NEURA UI instead of no interface.",
-    "UI is wired to GET /status and POST /command.",
-    "Responsive CSS 3D brain/entity implements idle, thinking, success and error visual states.",
-    "UI response adds a restrictive Content-Security-Policy and remains behind loopback middleware.",
-    "HTTP integration tests cover root UI, CSP, API wiring and unknown-route 404 behavior."
+    "Validated the exact UI/3D candidate head across RC2 Linux/Windows and Promotion Gate.",
+    "Closed H UI and I Graphics completion/verification gates based on executed CI evidence.",
+    "Advanced the persisted project state to final N release-candidate validation."
   ],
-  "candidate_head_before_state_update": "31779532ca6a362744361fe4f1cf5421ab2072c3",
   "pull_request": 25,
-  "next_action": "Finish validation of PR #25; if any check fails, fix that failure on the same candidate and rerun, otherwise promote the exact verified candidate to main and update H/I completion and verification points."
+  "next_action": "Validate the exact state-updated candidate head; if all RC2 and Promotion checks pass, fast-forward main to that exact verified SHA, close PR #25, then run/verify main and award N_release only if final release evidence is green."
 }
