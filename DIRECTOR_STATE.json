@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-25T16:58:00+02:00",
-  "current_branch": "candidate/memory-hardening-20260925-1652",
-  "candidate": "candidate/memory-hardening-20260925-1652",
-  "last_good_commit": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
+  "updated_at": "2026-09-25T17:00:00+02:00",
+  "current_branch": "main",
+  "candidate": "",
+  "last_good_commit": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2",
   "rollback_branch": "rollback/pre-memory-hardening-20260925-1652",
   "rollback_commit": "bd1148a6f4f84c4364f9875b964c04fe779e0268",
-  "current_gate": "POST_V1_MEMORY_LINEAGE_RESTART_RECALL_EXACT_HEAD_VALIDATION",
+  "current_gate": "POST_V1_WINDOWS_PACKAGING",
   "completion_score": 100,
   "verification_score": 100,
   "quality_score": 100,
@@ -49,29 +49,22 @@
   },
   "last_tests": [
     {
-      "name": "prior durable-task recovery Promotion Gate",
-      "run_id": 36150031444,
-      "attempt": 2,
+      "name": "memory hardening exact-head RC2",
+      "run_id": 36151061125,
       "result": "PASS",
-      "head_sha": "bd1148a6f4f84c4364f9875b964c04fe779e0268"
+      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
     },
     {
-      "name": "memory hardening RC2",
-      "run_id": 36150828498,
+      "name": "memory hardening exact-head Promotion Gate",
+      "run_id": 36151060968,
       "result": "PASS",
-      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
+      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
     },
     {
-      "name": "memory hardening Promotion Gate",
-      "run_id": 36150828564,
+      "name": "memory hardening exact-head Windows Package",
+      "run_id": 36151061124,
       "result": "PASS",
-      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
-    },
-    {
-      "name": "memory hardening Windows Package",
-      "run_id": 36150828507,
-      "result": "PASS",
-      "head_sha": "53a617e0d15091ade118612a67bf32817251d23e"
+      "head_sha": "833665a4944aa98110fbcf7e4b14f9fcfe061ea2"
     }
   ],
   "benchmark_baseline": {
@@ -120,8 +113,7 @@
     }
   },
   "blockers": [
-    "GitHub branch protection is disabled for main/stable; protection remains procedural.",
-    "Final exact HEAD including updated DIRECTOR_STATE.json requires RC2/Promotion/Windows validation before promotion."
+    "GitHub branch protection is disabled for main/stable; protection remains procedural."
   ],
   "implemented_this_run": [
     "DEBT CLOSED: exact durable-task recovery HEAD bd1148a passed RC2, Windows Package and Promotion Gate attempt 2 and was fast-forwarded to main.",
@@ -136,5 +128,5 @@
     "verified_sha": "7e94553d91c2ebfaa4498311f08f0eb3bc4b73b4",
     "promotion_gate_run_id": 36119854282
   },
-  "next_action": "Validate the exact final memory-hardening HEAD including state; fix any FAIL on this candidate, otherwise fast-forward the exact green SHA to main, then start a Windows packaging package with launcher, dependency/preflight checks and user-facing startup error UX."
+  "next_action": "Create rollback and candidate from main at 833665a4944aa98110fbcf7e4b14f9fcfe061ea2, then implement a Windows packaging slice with a user-facing launcher, dependency/preflight checks, actionable startup error UX, native Windows tests and package smoke validation."
 }
